@@ -47,6 +47,9 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.1.0",
+    "@eslint/eslintrc": "^3.0.0"
   }
 }
