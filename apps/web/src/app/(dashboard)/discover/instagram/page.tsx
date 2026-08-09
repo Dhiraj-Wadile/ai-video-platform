@@ -137,7 +137,7 @@ export default function ReelsTrendingPage() {
                 <div className="space-y-2 border-t border-border pt-3">
                   <p className="text-xs font-medium text-muted-foreground">Hook Ideas:</p>
                   {format.hooks.map((hook, j) => (
-                    <p key={j} className="text-sm italic text-muted-foreground">"{hook}"</p>
+                    <p key={j} className="text-sm italic text-muted-foreground">&ldquo;{hook}&rdquo;</p>
                   ))}
                   <Link
                     href={`/create/new?topic=${encodeURIComponent(format.title)}&style=storytelling`}
