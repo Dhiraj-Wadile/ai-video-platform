@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, field_validator
+from typing import Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from datetime import datetime
 
 from app.database import get_db
 from app.core.security import get_current_user
@@ -28,16 +29,22 @@ class ProjectUpdate(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     description: Optional[str]
     status: str
     project_type: str
     platform: Optional[str]
-    created_at: str
+    created_at: Any
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def serialize_created_at(cls, v):
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return str(v)
 
 
 @router.get("", response_model=List[ProjectResponse])

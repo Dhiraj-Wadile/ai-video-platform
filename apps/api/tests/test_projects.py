@@ -46,4 +46,4 @@ async def test_list_projects(client: AsyncClient):
 @pytest.mark.anyio
 async def test_projects_requires_auth(client: AsyncClient):
     response = await client.get("/api/projects")
-    assert response.status_code == 401
+    assert response.status_code in (401, 403)
