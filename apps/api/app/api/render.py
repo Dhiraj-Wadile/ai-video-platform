@@ -124,3 +124,40 @@ async def get_render_status(
         "error": job.error,
         "output_url": job.output_url,
     }
+
+
+class RecutRequest(BaseModel):
+    project_id: str
+
+
+@router.post("/recut", response_model=RenderResponse)
+async def recut_render(
+    request: RecutRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.recut_service import RecutService
+
+    project_result = await db.execute(
+        select(Project).where(Project.id == request.project_id, Project.user_id == user.id)
+    )
+    project = project_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        job = await RecutService().recut(request.project_id, db)
+        await db.commit()
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return RenderResponse(
+        status="completed",
+        project_id=request.project_id,
+        job_id=str(job.id),
+        message="Re-render completed successfully",
+    )

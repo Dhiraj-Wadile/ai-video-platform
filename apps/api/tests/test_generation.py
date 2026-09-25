@@ -219,7 +219,7 @@ async def test_render_start_persists_job_and_pipeline_outputs(client: AsyncClien
     assert scenes[0].visual_description == "Snowy mountain trail at dawn"
     assert len(gen_jobs) == 2
     assert {j.agent_name for j in gen_jobs} == {"script", "storyboard"}
-    assert {a.type for a in assets} == {"video", "captions"}
+    assert {a.type for a in assets} == {"video", "captions", "scene_image"}
     assert any(a.type == "video" for a in assets)
 
 

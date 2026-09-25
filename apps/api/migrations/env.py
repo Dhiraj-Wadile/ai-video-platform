@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -11,11 +12,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+databases_url = os.environ.get("DATABASE_URL")
+if databases_url:
+    config.set_main_option("sqlalchemy.url", databases_url)
+
 from app.models import (
     User, Project, Script, Scene, Character, Asset,
     GenerationJob, RenderJob, PublishingJob,
     Trend, VideoAnalytics, AiInsight,
     PromptTemplate, ApiKey, UserSession,
+    QualityReview, GenerationRecord,
 )
 from app.database import Base
 

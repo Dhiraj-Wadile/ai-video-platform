@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Render
     render_async: bool = False
 
+    # Quality gate
+    qa_threshold: int = 70
+
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001"]
 

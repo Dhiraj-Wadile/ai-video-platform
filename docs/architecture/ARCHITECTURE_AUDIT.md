@@ -4,18 +4,21 @@
 **Scope:** Full repository review (backend, frontend, worker, packages, infrastructure, CI).
 **Method:** Static analysis via imports, routes, references, runtime call sites, tests, configs, and documentation. No production data was touched.
 
-> **Status update (2026-09-25, Phases 1–5 shipped).** A repair phase, a verified-cleanup phase, an
-> async+persistence phase, a provider-boundaries phase, and a Higgsfield adapter phase have been
-> delivered against this audit: the agent input-contract bug is fixed (`AgentInput | dict`
-> normalization), the render pipeline persists Scripts/Scenes/GenerationJobs/Assets/RenderJobs, the
-> render-status endpoint no longer crashes, 19→45 backend tests pass, all dead provider code / unused
-> deps / empty scaffold dirs are removed, `create_all` is dropped in favor of Alembic (with migration
-> `003`), renders can be dispatched to the Celery worker with real progress polling, providers live
-> behind a formal boundary (capabilities, deterministic `ProviderRouter`, normalized `GenerationResult`,
-> `GET /api/providers`), and a real AI-video provider (Higgsfield via the official `higgsfield-client`
-> SDK) sits behind that boundary.
+> **Status update (2026-09-25, Phases 1–6 shipped).** A repair phase, a verified-cleanup phase, an
+> async+persistence phase, a provider-boundaries phase, a Higgsfield adapter phase, and a
+> quality/cost/lineage phase have been delivered against this audit: the agent input-contract bug is
+> fixed (`AgentInput | dict` normalization), the render pipeline persists
+> Scripts/Scenes/GenerationJobs/Assets/RenderJobs, the render-status endpoint no longer crashes,
+> 19→56 backend tests pass, all dead provider code / unused deps / empty scaffold dirs are removed,
+> `create_all` is dropped in favor of Alembic (with migrations `003`–`004`, now honoring
+> `DATABASE_URL`), renders can be dispatched to the Celery worker with real progress polling,
+> providers live behind a formal boundary (capabilities, deterministic `ProviderRouter`, normalized
+> `GenerationResult`, `GET /api/providers`), a real AI-video provider (Higgsfield via the official
+> `higgsfield-client` SDK) sits behind that boundary, and structured QA (persisted + gated), cost
+> tracking (per-project and global), single-scene regeneration, re-render from persisted scenes, and
+> chained generation lineage are live.
 > `lint / type-check / test / build` all pass on both apps.
-> See `docs/changes/0001…` through `docs/changes/0005-…`.
+> See `docs/changes/0001…` through `docs/changes/0006-…`.
 > Sections 4–7 below describe the state **as audited**; the follow-up section 11 (phased plan) tracks
 > completion. Section 8 (Keep) and section 9 (Refactor/Add) remain the roadmap for phases 6+.
 
@@ -326,14 +329,13 @@ Methods **actually called** (11/25): `register, login, getProjects, createProjec
 | **3** | Async + persistence | Dispatch pipeline via existing Celery+Redis; real progress/status; job/scene/asset persistence; migrations standard (drop `create_all`) | ✅ done (`docs/changes/0003-…`) |
 | **4** | Boundaries | Normalize `GenerationResult`, formalize provider capability protocols, provider router | ✅ done (`docs/changes/0004-…`) |
 | **5** | Higgsfield | Adapter behind provider boundary per current official docs; MCP for tool use | ✅ done — adapter shipped (`docs/changes/0005-…`); MCP server deferred to a standalone phase |
-| **6** | Quality + cost + scenes | Structured QA, cost tracking, scene regeneration, generation lineage | ⛔ not implemented — run finalized at Phase 5 |
-| **7** | Product UX | Real studio view (scenes editable/regeneratable), progress clarity, remove/retire dead screens | ⛔ not implemented — run finalized at Phase 5 |
-| **8** | Hardening | Security, tests around failure modes, lint/typecheck/build/tests in CI, README truth | ⛔ not implemented — run finalized at Phase 5 |
+| **6** | Quality + cost + scenes | Structured QA, cost tracking, scene regeneration, generation lineage | ✅ done (`docs/changes/0006-…`) |
+| **7** | Product UX | Real studio view (scenes editable/regeneratable), progress clarity, remove/retire dead screens | ⏳ next |
+| **8** | Hardening | Security, tests around failure modes, lint/typecheck/build/tests in CI, README truth | pending |
 
 Each phase gets a small spec in `docs/specs/` + a change log entry in `docs/changes/` before implementation, and passes lint/tests/build before completion.
 
-> **Run finalization (2026-09-25):** the phased SDD run concluded at **Phase 5**. Phases 6–8 are
-> intentionally **not implemented** (work was scoped by the user to the five shipped phases).
-> Recommended entry points for any future continuation, in priority order:
-> Phase 6 lineage/cost (persist `metadata["providers"]` + `GenerationResult` already produced by the
-> pipeline), Phase 8 CI/test hardening, then Phase 7 product UX.
+> **Run finalization (2026-09-25):** the SDD run covers **Phases 0–6** and continues through Phases 7
+> and 8. If it stops after the remaining UX (7) and hardening (8) phases, the deliverable set is
+> complete; pending follow-ups of note: blocking quality gates wired into the product flow, MCP
+> tool-use server, and Postgres-only baseline migrations (JSONB) to make the alembic chain portable.

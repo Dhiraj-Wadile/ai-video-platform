@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 import inspect
+import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from app.models.project import Project
 from app.models.script import Script, Scene
 from app.models.job import GenerationJob
 from app.models.asset import Asset
+from app.models.lineage import GenerationRecord
 
 
 @dataclass
@@ -63,6 +65,8 @@ class VideoPipeline:
     ) -> PipelineResult:
         project = None
         script_id = None
+        script_record_id = None
+        storyboard_record_id = None
 
         try:
             if db:
@@ -94,6 +98,18 @@ class VideoPipeline:
                 await db.flush()
                 script_id = str(script.id)
                 db.add(self._generation_job(project_id, "script", script_result, topic))
+                script_record = self._lineage_record(
+                    project_id,
+                    task=ProviderTask.LLM,
+                    provider=self._provider_label(self.providers[ProviderTask.LLM]),
+                    model=script_result.metadata.get("model"),
+                    cost_cents=script_result.metadata.get("cost_cents"),
+                    latency_ms=script_result.metadata.get("latency_ms"),
+                    context={"agent": "script", "title": script_data.get("title", topic)},
+                )
+                db.add(script_record)
+                await db.flush()
+                script_record_id = str(script_record.id)
                 await db.commit()
 
             await self._emit_progress(on_progress, 15, "Planning storyboard...")
@@ -122,16 +138,31 @@ class VideoPipeline:
                         transition=scene.get("transition"),
                     ))
                 db.add(self._generation_job(project_id, "storyboard", storyboard_result, topic))
+                storyboard_record = self._lineage_record(
+                    project_id,
+                    task=ProviderTask.LLM,
+                    provider=self._provider_label(self.providers[ProviderTask.LLM]),
+                    model=storyboard_result.metadata.get("model"),
+                    cost_cents=storyboard_result.metadata.get("cost_cents"),
+                    latency_ms=storyboard_result.metadata.get("latency_ms"),
+                    context={"agent": "storyboard", "scene_count": len(scenes_data)},
+                    parent_id=script_record_id,
+                )
+                db.add(storyboard_record)
+                await db.flush()
+                storyboard_record_id = str(storyboard_record.id)
                 await db.commit()
 
             await self._emit_progress(on_progress, 30, "Generating scene visuals...")
             scene_assets = []
             for i, scene in enumerate(scenes_data):
                 visual_desc = scene.get("visual_description", topic)
+                image_start = time.time()
                 images = await self.image.generate(
                     prompt=f"Cinematic, high quality: {visual_desc}",
                     size="1080x1920",
                 )
+                image_latency = int((time.time() - image_start) * 1000)
                 image_url = images[0].url if images else ""
 
                 scene_assets.append(SceneAsset(
@@ -139,6 +170,32 @@ class VideoPipeline:
                     duration=float(scene.get("duration", 3)),
                     transition=scene.get("transition", "fade"),
                 ))
+
+                if db and project:
+                    scene_number = int(scene.get("scene_number", i + 1))
+                    db.add(Asset(
+                        project_id=project_id,
+                        type="scene_image",
+                        url=image_url if image_url else f"/storage/projects/{project_id}/scene/{scene_number}.png",
+                        metadata_json={
+                            "scene_id": scene_number,
+                            "source": "pipeline",
+                            "key": generate_asset_key(project_id, "scene_image", "png"),
+                        },
+                    ))
+                    image_record = self._lineage_record(
+                        project_id,
+                        task=ProviderTask.IMAGE,
+                        provider=self._provider_label(self.providers[ProviderTask.IMAGE]),
+                        model=getattr(self.providers[ProviderTask.IMAGE], "default_model", None),
+                        cost_cents=0,
+                        latency_ms=image_latency,
+                        context={"scene_id": scene_number, "prompt": visual_desc},
+                        parent_id=storyboard_record_id,
+                    )
+                    db.add(image_record)
+                    await db.flush()
+                    await db.commit()
 
                 await self._emit_progress(
                     on_progress,
@@ -196,6 +253,16 @@ class VideoPipeline:
                     url=await self.storage.get_url(video_key.replace(".mp4", ".srt")),
                     metadata_json={"content": srt_content},
                 ))
+                db.add(self._lineage_record(
+                    project_id,
+                    task="render",
+                    provider="local-ffmpeg",
+                    model=None,
+                    cost_cents=0,
+                    latency_ms=0,
+                    context={"duration_seconds": render_result.duration, "file_size": render_result.file_size},
+                    parent_id=storyboard_record_id,
+                ))
                 project.status = "ready"
                 await db.commit()
 
@@ -237,6 +304,10 @@ class VideoPipeline:
             on_progress(progress, message)
 
     @staticmethod
+    def _provider_label(provider) -> str:
+        return getattr(provider, "name", None) or type(provider).__name__
+
+    @staticmethod
     def _generation_job(project_id: str, agent_name: str, result, input_hint: str) -> GenerationJob:
         metadata = result.metadata or {}
         return GenerationJob(
@@ -250,4 +321,27 @@ class VideoPipeline:
             tokens_out=metadata.get("tokens_out"),
             latency_ms=metadata.get("latency_ms"),
             cost_cents=metadata.get("cost_cents"),
+        )
+
+    @staticmethod
+    def _lineage_record(
+        project_id: str,
+        task,
+        provider: str,
+        model,
+        cost_cents,
+        latency_ms,
+        context: Dict[str, Any],
+        parent_id: Optional[str] = None,
+    ) -> GenerationRecord:
+        return GenerationRecord(
+            project_id=project_id,
+            task=task.value if hasattr(task, "value") else str(task),
+            provider=provider,
+            model=model,
+            status="completed",
+            cost_cents=cost_cents or 0,
+            latency_ms=latency_ms or 0,
+            parent_id=parent_id,
+            context_json=context,
         )

@@ -7,10 +7,13 @@ from app.models.job import GenerationJob, RenderJob, PublishingJob
 from app.models.trend import Trend, VideoAnalytics, AiInsight
 from app.models.prompt import PromptTemplate
 from app.models.api_key import ApiKey, UserSession
+from app.models.quality import QualityReview
+from app.models.lineage import GenerationRecord
 
 __all__ = [
     "User", "Project", "Script", "Scene", "Character", "Asset",
     "GenerationJob", "RenderJob", "PublishingJob",
     "Trend", "VideoAnalytics", "AiInsight",
     "PromptTemplate", "ApiKey", "UserSession",
+    "QualityReview", "GenerationRecord",
 ]
