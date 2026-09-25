@@ -1,6 +1,153 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List, Optional, AsyncIterator
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional, AsyncIterator
+
+
+class ProviderTask(str, Enum):
+    LLM = "llm"
+    IMAGE = "image"
+    VOICE = "voice"
+    VIDEO = "video"
+    MUSIC = "music"
+    TRANSCRIPTION = "transcription"
+
+
+class ProviderNotConfigured(Exception):
+    def __init__(self, task: ProviderTask, candidates: List[str]):
+        self.task = task
+        self.candidates = candidates
+        super().__init__(
+            f"No configured provider for task '{task.value}' "
+            f"(candidates: {', '.join(candidates) or 'none'})"
+        )
+
+
+@dataclass
+class ProviderInfo:
+    name: str
+    task: ProviderTask
+    vendor: str
+    models: List[str]
+    configured: bool
+    enabled: bool
+    is_mock: bool
+    priority: int
+
+    def as_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "task": self.task.value,
+            "vendor": self.vendor,
+            "models": self.models,
+            "configured": self.configured,
+            "enabled": self.enabled,
+            "is_mock": self.is_mock,
+            "priority": self.priority,
+        }
+
+
+class ProviderInfoMixin:
+    name: str = "unknown"
+    vendor: str = ""
+    capability: Optional[ProviderTask] = None
+    priority: int = 100
+    is_mock: bool = False
+    models: List[str] = []
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return True
+
+    @classmethod
+    def to_info(cls) -> ProviderInfo:
+        return ProviderInfo(
+            name=cls.name,
+            task=cls.capability,
+            vendor=cls.vendor,
+            models=list(cls.models),
+            configured=cls.is_configured(),
+            enabled=cls.is_configured(),
+            is_mock=cls.is_mock,
+            priority=cls.priority,
+        )
+
+
+@dataclass
+class GenerationResult:
+    task: ProviderTask
+    provider: str
+    model: Optional[str] = None
+    content: str = ""
+    media_url: Optional[str] = None
+    audio_base64: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    format: Optional[str] = None
+    latency_ms: int = 0
+    cost_cents: int = 0
+    usage: Dict[str, Any] = field(default_factory=dict)
+    raw: Any = None
+
+    def as_dict(self) -> dict:
+        return {
+            "task": self.task.value,
+            "provider": self.provider,
+            "model": self.model,
+            "content": self.content,
+            "media_url": self.media_url,
+            "duration_seconds": self.duration_seconds,
+            "format": self.format,
+            "latency_ms": self.latency_ms,
+            "cost_cents": self.cost_cents,
+            "usage": dict(self.usage),
+        }
+
+
+def adapt(
+    result,
+    task: ProviderTask,
+    provider: str,
+    model: Optional[str] = None,
+) -> GenerationResult:
+    if isinstance(result, LLMResponse):
+        return GenerationResult(
+            task=task,
+            provider=provider,
+            model=result.model or model,
+            content=result.content,
+            latency_ms=result.latency_ms,
+            cost_cents=result.cost_cents,
+            usage={"tokens_in": result.tokens_in, "tokens_out": result.tokens_out},
+        )
+    if isinstance(result, list) and result and isinstance(result[0], ImageResult):
+        img = result[0]
+        return GenerationResult(
+            task=task,
+            provider=provider,
+            model=model,
+            content=img.revised_prompt or "",
+            media_url=img.url,
+            format="image",
+        )
+    if isinstance(result, AudioResult):
+        return GenerationResult(
+            task=task,
+            provider=provider,
+            model=model,
+            audio_base64=result.audio_base64,
+            duration_seconds=result.duration_seconds,
+            format=result.format,
+        )
+    if isinstance(result, VideoResult):
+        return GenerationResult(
+            task=task,
+            provider=provider,
+            model=model,
+            media_url=result.url,
+            duration_seconds=result.duration_seconds,
+            format="video",
+        )
+    return GenerationResult(task=task, provider=provider, model=model, raw=result)
 
 
 @dataclass

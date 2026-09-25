@@ -3,14 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import engine, Base
-from app.api import auth, projects, scripts, characters, storyboard, assets, render, trends, analytics, agents, prompts
+from app.database import engine
+from app.api import auth, projects, scripts, characters, storyboard, assets, render, trends, analytics, agents, prompts, providers
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Schema is managed by Alembic (`alembic upgrade head`), never create_all.
     yield
     await engine.dispose()
 
@@ -43,6 +42,7 @@ app.include_router(trends.router, prefix="/api/trends", tags=["Trends"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
 app.include_router(prompts.router, prefix="/api/prompts", tags=["Prompts"])
+app.include_router(providers.router, prefix="/api/providers", tags=["Providers"])
 
 
 @app.get("/api/health")

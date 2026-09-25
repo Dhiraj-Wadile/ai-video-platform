@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.trend import VideoAnalytics, AiInsight
+from app.models.trend import VideoAnalytics
 
 router = APIRouter()
 

@@ -2,14 +2,24 @@ import time
 from typing import List, Optional, AsyncIterator
 from openai import AsyncOpenAI
 
-from app.providers.base import LLMProvider, LLMResponse
+from app.providers.base import LLMProvider, LLMResponse, ProviderInfoMixin, ProviderTask
 from app.config import settings
 
 
-class OpenAIProvider(LLMProvider):
+class OpenAIProvider(LLMProvider, ProviderInfoMixin):
+    name = "openai"
+    vendor = "openai"
+    capability = ProviderTask.LLM
+    priority = 10
+    models = ["gpt-4o", "gpt-4o-mini"]
+    default_model = "gpt-4o"
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return bool(settings.openai_api_key)
+
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.default_model = "gpt-4o"
 
     async def complete(
         self,

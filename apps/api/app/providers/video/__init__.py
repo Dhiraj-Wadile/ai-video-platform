@@ -4,12 +4,17 @@ import hashlib
 import json
 from typing import Optional
 
-from app.providers.base import VideoProvider, VideoResult
+from app.providers.base import VideoProvider, VideoResult, ProviderInfoMixin, ProviderTask
 from app.config import settings
 
 
-class PollinationsVideoProvider(VideoProvider):
+class PollinationsVideoProvider(VideoProvider, ProviderInfoMixin):
     """Free video generation via Pollinations.ai (image-to-video)."""
+
+    name = "pollinations"
+    vendor = "pollinations.ai"
+    capability = ProviderTask.VIDEO
+    priority = 20
 
     async def generate(
         self,
@@ -36,8 +41,18 @@ class PollinationsVideoProvider(VideoProvider):
         return VideoResult(url="", duration_seconds=duration)
 
 
-class RunwayVideoProvider(VideoProvider):
+class RunwayVideoProvider(VideoProvider, ProviderInfoMixin):
     """Runway ML video generation provider."""
+
+    name = "runway"
+    vendor = "runwayml"
+    capability = ProviderTask.VIDEO
+    priority = 10
+    models = ["gen3a_turbo"]
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return bool(settings.runway_api_key)
 
     def __init__(self):
         self.api_key = settings.runway_api_key
@@ -88,24 +103,3 @@ class RunwayVideoProvider(VideoProvider):
                     raise RuntimeError(f"Runway generation failed: {status_data.get('error')}")
 
         return VideoResult(url="", duration_seconds=duration)
-
-
-class MockVideoProvider(VideoProvider):
-    """Mock video provider for development."""
-
-    async def generate(
-        self,
-        prompt: str,
-        duration: float = 5.0,
-        image_url: Optional[str] = None,
-    ) -> VideoResult:
-        return VideoResult(
-            url="https://example.com/mock_video.mp4",
-            duration_seconds=duration,
-        )
-
-
-def get_video_provider() -> VideoProvider:
-    if settings.runway_api_key:
-        return RunwayVideoProvider()
-    return PollinationsVideoProvider()

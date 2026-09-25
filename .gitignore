@@ -1,7 +1,6 @@
 # Database
 *.db
 *.sqlite3
-alembic.ini
 
 # Environment
 .env
@@ -31,6 +30,7 @@ out/
 dist/
 build/
 *.log
+*.tsbuildinfo
 
 # OS
 .DS_Store

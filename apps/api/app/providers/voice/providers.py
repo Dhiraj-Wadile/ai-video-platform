@@ -2,12 +2,22 @@ import httpx
 import base64
 from typing import List, Optional
 
-from app.providers.base import VoiceProvider, AudioResult, Voice
+from app.providers.base import VoiceProvider, AudioResult, Voice, ProviderInfoMixin, ProviderTask
 from app.config import settings
 
 
-class ElevenLabsProvider(VoiceProvider):
+class ElevenLabsProvider(VoiceProvider, ProviderInfoMixin):
     """ElevenLabs TTS provider"""
+
+    name = "elevenlabs"
+    vendor = "elevenlabs"
+    capability = ProviderTask.VOICE
+    priority = 10
+    models = ["eleven_multilingual_v2"]
+
+    @classmethod
+    def is_configured(cls) -> bool:
+        return bool(settings.elevenlabs_api_key)
 
     def __init__(self):
         self.api_key = settings.elevenlabs_api_key
@@ -65,8 +75,14 @@ class ElevenLabsProvider(VoiceProvider):
             return voices
 
 
-class MockVoiceProvider(VoiceProvider):
+class MockVoiceProvider(VoiceProvider, ProviderInfoMixin):
     """Mock voice provider for development."""
+
+    name = "mock-voice"
+    vendor = "local"
+    capability = ProviderTask.VOICE
+    priority = 200
+    is_mock = True
 
     async def synthesize(
         self,

@@ -19,18 +19,14 @@ class Settings(BaseSettings):
 
     # AI Providers
     openai_api_key: str = ""
-    anthropic_api_key: str = ""
-    google_api_key: str = ""
 
     # Voice Providers
     elevenlabs_api_key: str = ""
-    edge_tts_voice: str = "en-US-AriaNeural"
-
-    # Image Providers
-    pollinations_enabled: bool = True
 
     # Video Providers
     runway_api_key: str = ""
+    higgsfield_api_key: str = ""
+    higgsfield_video_model: str = ""
 
     # Storage
     s3_endpoint: str = "http://localhost:9000"
@@ -38,19 +34,11 @@ class Settings(BaseSettings):
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
 
-    # App
-    app_url: str = "http://localhost:3000"
-    api_url: str = "http://localhost:8000"
+    # Render
+    render_async: bool = False
 
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001"]
-
-    # Rate Limiting
-    rate_limit_per_minute: int = 60
-
-    # Cost Management
-    max_monthly_cost_cents: int = 50000
-    default_quality: str = "balanced"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

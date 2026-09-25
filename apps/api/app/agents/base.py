@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 import time
-import uuid
 
 from app.providers.base import LLMProvider
 
@@ -29,7 +28,14 @@ class BaseAgent(ABC):
     def __init__(self, llm_provider: LLMProvider):
         self.llm = llm_provider
 
-    async def run(self, input: AgentInput) -> AgentOutput:
+    async def run(self, input: Union[AgentInput, Dict[str, Any]]) -> AgentOutput:
+        if not isinstance(input, AgentInput):
+            input = AgentInput(
+                content=input.get("content", ""),
+                context=input.get("context") or {},
+                metadata=input.get("metadata") or {},
+            )
+
         start_time = time.time()
 
         await self.validate_input(input)

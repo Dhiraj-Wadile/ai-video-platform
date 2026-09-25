@@ -49,6 +49,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_video_platform
       - REDIS_URL=redis://redis:6379
+      - RENDER_ASYNC=true
     depends_on:
       postgres:
         condition: service_healthy

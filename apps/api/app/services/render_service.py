@@ -2,6 +2,7 @@ import os
 import subprocess
 import tempfile
 import uuid
+import inspect
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 import asyncio
@@ -65,47 +66,43 @@ class VideoRenderer:
         os.makedirs(slides_dir, exist_ok=True)
 
         try:
-            if on_progress:
-                on_progress(0, "Preparing slides...")
+            await self._emit_progress(on_progress, 0, "Preparing slides...")
 
             slide_paths = []
             for i, scene in enumerate(scenes):
                 slide_path = os.path.join(slides_dir, f"slide_{i:03d}.png")
                 await self._create_slide(scene.image_path, scene.duration, slide_path, i, len(scenes))
                 slide_paths.append(slide_path)
-                if on_progress:
-                    on_progress((i + 1) / len(scenes) * 20, f"Created slide {i + 1}/{len(scenes)}")
+                await self._emit_progress(
+                    on_progress,
+                    (i + 1) / len(scenes) * 20,
+                    f"Created slide {i + 1}/{len(scenes)}",
+                )
 
-            if on_progress:
-                on_progress(20, "Building video timeline...")
+            await self._emit_progress(on_progress, 20, "Building video timeline...")
 
             video_parts = await self._build_video_parts(slide_paths, scenes, job_id)
 
-            if on_progress:
-                on_progress(40, "Concatenating video...")
+            await self._emit_progress(on_progress, 40, "Concatenating video...")
 
             concatenated = await self._concatenate_videos(video_parts, job_id)
 
-            if on_progress:
-                on_progress(55, "Adding audio...")
+            await self._emit_progress(on_progress, 55, "Adding audio...")
 
             with_audio = await self._add_audio(concatenated, scenes, job_id)
 
             if background_music_path and os.path.exists(background_music_path):
-                if on_progress:
-                    on_progress(70, "Mixing background music...")
+                await self._emit_progress(on_progress, 70, "Mixing background music...")
                 with_audio = await self._mix_music(with_audio, background_music_path, music_volume, job_id)
 
             if captions:
-                if on_progress:
-                    on_progress(80, "Burning captions...")
+                await self._emit_progress(on_progress, 80, "Burning captions...")
                 srt_path = os.path.join(self.temp_dir, f"captions_{job_id}.srt")
                 with open(srt_path, "w", encoding="utf-8") as f:
                     f.write(captions_to_srt(captions))
                 with_audio = await self._burn_captions(with_audio, srt_path, job_id)
 
-            if on_progress:
-                on_progress(90, "Finalizing...")
+            await self._emit_progress(on_progress, 90, "Finalizing...")
 
             os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             if with_audio != output_path:
@@ -114,8 +111,7 @@ class VideoRenderer:
             file_size = os.path.getsize(output_path)
             total_duration = sum(s.duration for s in scenes)
 
-            if on_progress:
-                on_progress(100, "Render complete!")
+            await self._emit_progress(on_progress, 100, "Render complete!")
 
             return RenderResult(
                 output_path=output_path,
@@ -126,6 +122,14 @@ class VideoRenderer:
 
         finally:
             self._cleanup(slides_dir)
+
+    async def _emit_progress(self, on_progress, progress: float, message: str):
+        if on_progress is None:
+            return
+        if inspect.iscoroutinefunction(on_progress):
+            await on_progress(progress, message)
+        else:
+            on_progress(progress, message)
 
     async def _create_slide(
         self,

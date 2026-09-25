@@ -1,11 +1,16 @@
 import httpx
-from typing import List, Optional
+from typing import List
 
-from app.providers.base import ImageProvider, ImageResult
+from app.providers.base import ImageProvider, ImageResult, ProviderInfoMixin, ProviderTask
 
 
-class PollinationsProvider(ImageProvider):
+class PollinationsProvider(ImageProvider, ProviderInfoMixin):
     """Free image generation via Pollinations.ai"""
+
+    name = "pollinations"
+    vendor = "pollinations.ai"
+    capability = ProviderTask.IMAGE
+    priority = 20
 
     async def generate(
         self,
@@ -24,22 +29,3 @@ class PollinationsProvider(ImageProvider):
                 return [ImageResult(url=url, revised_prompt=prompt)]
 
         return [ImageResult(url="", revised_prompt=prompt)]
-
-
-class MockImageProvider(ImageProvider):
-    """Mock image provider for development."""
-
-    async def generate(
-        self,
-        prompt: str,
-        size: str = "1024x1792",
-        quality: str = "standard",
-        n: int = 1,
-    ) -> List[ImageResult]:
-        return [
-            ImageResult(
-                url=f"https://via.placeholder.com/{size.replace('x', 'x')}?text=AI+Generated",
-                revised_prompt=prompt,
-            )
-            for _ in range(n)
-        ]

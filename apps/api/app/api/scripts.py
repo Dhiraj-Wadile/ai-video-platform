@@ -7,7 +7,8 @@ from sqlalchemy import select
 from app.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.script import Script, Scene
+from app.models.script import Script
+from app.models.project import Project
 from app.agents.registry import get_agent
 from app.providers.llm.openai import OpenAIProvider
 
@@ -19,6 +20,7 @@ class ScriptGenerateRequest(BaseModel):
     duration: str = "30s"
     style: str = "educational"
     additional_context: Optional[str] = None
+    project_id: Optional[str] = None
 
 
 class ScriptResponse(BaseModel):
@@ -33,6 +35,7 @@ class ScriptResponse(BaseModel):
 async def generate_script(
     request: ScriptGenerateRequest,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     llm = OpenAIProvider()
     agent = get_agent("script", llm)
@@ -47,7 +50,30 @@ async def generate_script(
     })
 
     data = result.structured_data or {}
+
+    script_id = None
+    if request.project_id:
+        project_check = await db.execute(
+            select(Project).where(Project.id == request.project_id, Project.user_id == user.id)
+        )
+        project = project_check.scalar_one_or_none()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        script = Script(
+            project_id=request.project_id,
+            title=data.get("title", request.topic),
+            content=data.get("full_script", result.content),
+            duration=data.get("duration"),
+            structure_json=data.get("sections"),
+        )
+        db.add(script)
+        await db.flush()
+        script_id = str(script.id)
+        project.status = "generating"
+
     return ScriptResponse(
+        id=script_id,
         title=data.get("title", request.topic),
         content=data.get("full_script", result.content),
         duration=data.get("duration"),
