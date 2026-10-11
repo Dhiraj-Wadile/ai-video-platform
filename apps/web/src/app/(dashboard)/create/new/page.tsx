@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Wand2, Sparkles, Loader2, Video, Clock, BarChart3, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Wand2, Sparkles, Loader2, Video, Clock, BarChart3, CheckCircle2, AlertCircle, Shuffle } from 'lucide-react'
 import { api } from '@/lib/api'
+import { VIDEO_IDEAS } from '@/lib/utils'
 
-export default function NewVideoPage() {
+function NewVideoForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [topic, setTopic] = useState('')
   const [duration, setDuration] = useState('30s')
   const [style, setStyle] = useState('educational')
@@ -18,6 +20,11 @@ export default function NewVideoPage() {
   const [stageMessage, setStageMessage] = useState('')
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const preset = searchParams.get('topic')
+    if (preset) setTopic(preset)
+  }, [searchParams])
 
   const steps = [
     'Creating project...',
@@ -99,8 +106,13 @@ export default function NewVideoPage() {
     }
   }
 
+  const surpriseMe = () => {
+    const pick = VIDEO_IDEAS[Math.floor(Math.random() * VIDEO_IDEAS.length)]
+    setTopic(pick)
+  }
+
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Wand2 className="w-6 h-6 text-violet-500" />
@@ -109,7 +121,7 @@ export default function NewVideoPage() {
         <p className="text-sm text-muted-foreground">Let AI generate a complete video from your idea</p>
       </div>
 
-      <div className="p-6 rounded-2xl bg-card border border-border space-y-6">
+      <div className="p-4 sm:p-6 rounded-2xl bg-card border border-border space-y-6">
         {error && (
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2 flex-wrap">
             <AlertCircle className="w-4 h-4" /> {error}
@@ -125,16 +137,37 @@ export default function NewVideoPage() {
         )}
 
         <div>
-          <label className="text-sm font-medium mb-2 block">Video Topic *</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Video Topic *</label>
+            <button
+              type="button"
+              onClick={surpriseMe}
+              className="inline-flex items-center gap-1.5 text-xs text-violet-500 hover:underline"
+            >
+              <Shuffle className="w-3.5 h-3.5" /> Surprise me
+            </button>
+          </div>
           <input
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="e.g., 5 habits that make you successful, Why AI is the future..."
             className="w-full px-4 py-3 rounded-xl bg-background border border-border focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-all text-sm"
           />
+          <div className="flex flex-wrap gap-2 mt-3">
+            {VIDEO_IDEAS.slice(0, 4).map((idea) => (
+              <button
+                key={idea}
+                type="button"
+                onClick={() => setTopic(idea)}
+                className="px-3 py-1.5 rounded-full bg-muted/50 border border-border text-xs hover:border-violet-500/50 hover:text-violet-500 transition-colors"
+              >
+                {idea}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="text-sm font-medium mb-2 block">Duration</label>
             <select
@@ -217,7 +250,7 @@ export default function NewVideoPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { icon: Video, label: 'Script', desc: 'AI writes the script' },
           { icon: Clock, label: 'Storyboard', desc: 'Scene-by-scene plan' },
@@ -231,5 +264,13 @@ export default function NewVideoPage() {
         ))}
       </div>
     </div>
+  )
+}
+
+export default function NewVideoPage() {
+  return (
+    <Suspense fallback={<div className="p-6 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}>
+      <NewVideoForm />
+    </Suspense>
   )
 }

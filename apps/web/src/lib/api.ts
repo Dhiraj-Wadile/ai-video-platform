@@ -1,4 +1,8 @@
+import { formatApiError } from './utils'
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+const NETWORK_ERROR = `Can't reach the server right now. Please check your connection and try again.`
 
 interface RequestOptions {
   method?: string
@@ -9,6 +13,14 @@ interface RequestOptions {
 function getToken(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem('token')
+}
+
+function handleUnauthorized() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    window.location.href = '/auth/signin'
+  }
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -31,19 +43,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     config.body = JSON.stringify(body)
   }
 
-  const response = await fetch(`${API_BASE}${path}`, config)
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, config)
+  } catch {
+    throw new Error(NETWORK_ERROR)
+  }
 
   if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token')
-      window.location.href = '/auth/signin'
-    }
-    throw new Error('Unauthorized')
+    handleUnauthorized()
+    throw new Error('Your session expired. Please sign in again.')
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }))
-    throw new Error(error.detail || `HTTP ${response.status}`)
+    const error = await response.json().catch(() => null)
+    throw new Error(error ? formatApiError(error) : `Request failed (HTTP ${response.status})`)
   }
 
   return response.json()
@@ -66,11 +80,21 @@ async function uploadFile<T>(path: string, file: File, extraData?: Record<string
     config.headers = { Authorization: `Bearer ${token}` }
   }
 
-  const response = await fetch(`${API_BASE}${path}`, config)
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, config)
+  } catch {
+    throw new Error(NETWORK_ERROR)
+  }
+
+  if (response.status === 401) {
+    handleUnauthorized()
+    throw new Error('Your session expired. Please sign in again.')
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Upload failed' }))
-    throw new Error(error.detail || `HTTP ${response.status}`)
+    const error = await response.json().catch(() => null)
+    throw new Error(error ? formatApiError(error) : `Upload failed (HTTP ${response.status})`)
   }
 
   return response.json()

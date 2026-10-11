@@ -2,70 +2,158 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Video, TrendingUp, Sparkles, DollarSign, BarChart3, Wand2, Loader2 } from 'lucide-react'
+import {
+  Video, TrendingUp, Sparkles, DollarSign, BarChart3, Wand2, Loader2, AlertCircle,
+  Lightbulb, MousePointerClick, Rocket, RefreshCw,
+} from 'lucide-react'
 import { api } from '@/lib/api'
+import { VIDEO_IDEAS } from '@/lib/utils'
+
+interface Project {
+  id: string
+  name?: string
+  title?: string
+  status?: string
+  platform?: string
+  project_type?: string
+}
+
+interface Trend {
+  id?: string
+  topic?: string
+  score?: number
+  source?: string
+}
+
+const onboardingSteps = [
+  { icon: Lightbulb, title: 'Pick an idea', desc: 'Type a topic or use a ready-made one.' },
+  { icon: Wand2, title: 'AI builds it', desc: 'Script, scenes, voice and render are automatic.' },
+  { icon: Rocket, title: 'Review & publish', desc: 'Tweak anything, then post to your platforms.' },
+]
 
 export default function DashboardPage() {
   const [stats, setStats] = useState([
-    { label: 'Videos Created', value: '0', change: 'Loading...', icon: Video, color: 'text-violet-500' },
-    { label: 'Videos Published', value: '0', change: 'Loading...', icon: TrendingUp, color: 'text-emerald-500' },
-    { label: 'Generation Cost', value: '$0.00', change: 'Loading...', icon: DollarSign, color: 'text-amber-500' },
-    { label: 'Total Views', value: '0', change: 'Loading...', icon: BarChart3, color: 'text-blue-500' },
+    { label: 'Videos Created', value: '0', change: 'Total projects', icon: Video, color: 'text-violet-500' },
+    { label: 'Videos Published', value: '0', change: 'Published', icon: TrendingUp, color: 'text-emerald-500' },
+    { label: 'Generation Cost', value: '$0.00', change: 'All time', icon: DollarSign, color: 'text-amber-500' },
+    { label: 'Total Views', value: '0', change: 'Across platforms', icon: BarChart3, color: 'text-blue-500' },
   ])
-  const [projects, setProjects] = useState<any[]>([])
-  const [trends, setTrends] = useState<any[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [trends, setTrends] = useState<Trend[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     loadDashboard()
   }, [])
 
   async function loadDashboard() {
+    setLoading(true)
+    setError('')
     try {
       const [projectsRes, trendsRes]: any[] = await Promise.allSettled([
         api.getProjects(),
         api.getTrends(),
-      ]).then((results) => results.map((r) => r.status === 'fulfilled' ? r.value : null))
+      ]).then((results) => results.map((r) => (r.status === 'fulfilled' ? r.value : null)))
 
-      if (projectsRes) {
-        const projectList = projectsRes.projects || projectsRes || []
-        setProjects(Array.isArray(projectList) ? projectList.slice(0, 5) : [])
-        setStats((prev) => [
-          { ...prev[0], value: String(projectList.length || 0), change: 'Total projects' },
-          { ...prev[1], value: String(projectList.filter((p: any) => p.status === 'published').length || 0), change: 'Published' },
-          prev[2],
-          prev[3],
-        ])
-      }
+      const projectList = projectsRes?.projects || projectsRes || []
+      const list: Project[] = Array.isArray(projectList) ? projectList : []
+      setProjects(list.slice(0, 5))
+      setStats((prev) => [
+        { ...prev[0], value: String(list.length || 0) },
+        { ...prev[1], value: String(list.filter((p) => p.status === 'published').length || 0) },
+        prev[2],
+        prev[3],
+      ])
 
-      if (trendsRes) {
-        const trendList = trendsRes.trends || trendsRes || []
-        setTrends(Array.isArray(trendList) ? trendList.slice(0, 5) : [])
-      }
-    } catch {
-      // Dashboard loads with default data on error
+      const trendList = trendsRes?.trends || trendsRes || []
+      setTrends(Array.isArray(trendList) ? trendList.slice(0, 5) : [])
+    } catch (err: any) {
+      setError(err?.message || 'Could not load your dashboard.')
     } finally {
       setLoading(false)
     }
   }
 
+  const isFirstRun = !loading && !error && projects.length === 0
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">Welcome back! Here&apos;s your content overview.</p>
         </div>
         <Link
           href="/create/new"
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium hover:brightness-110 transition-all"
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium hover:brightness-110 transition-all"
         >
           <Wand2 className="w-4 h-4" />
           Create Video
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {error && (
+        <div className="p-4 rounded-2xl bg-destructive/10 text-destructive text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {error}</span>
+          <button
+            onClick={loadDashboard}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 font-medium transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
+        </div>
+      )}
+
+      {isFirstRun && (
+        <section className="p-6 sm:p-8 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-600/10 via-purple-600/10 to-pink-600/10">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-5 h-5 text-violet-500" />
+            <h2 className="text-lg font-semibold">Let&apos;s make your first video</h2>
+          </div>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            No experience needed. Pick an idea and AI writes the script, plans the scenes, generates the
+            visuals and renders the video for you.
+          </p>
+
+          <div className="grid sm:grid-cols-3 gap-3 my-6">
+            {onboardingSteps.map((step, i) => (
+              <div key={step.title} className="p-4 rounded-xl bg-card/60 border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <step.icon className="w-4 h-4 text-violet-500" />
+                  <span className="text-xs font-semibold text-muted-foreground">STEP {i + 1}</span>
+                </div>
+                <p className="text-sm font-medium">{step.title}</p>
+                <p className="text-xs text-muted-foreground mt-1">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <MousePointerClick className="w-3.5 h-3.5" /> Start with an idea
+          </p>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {VIDEO_IDEAS.slice(0, 6).map((idea) => (
+              <Link
+                key={idea}
+                href={`/create/new?topic=${encodeURIComponent(idea)}`}
+                className="px-3 py-2 rounded-full bg-card border border-border text-xs hover:border-violet-500/50 hover:text-violet-500 transition-colors"
+              >
+                {idea}
+              </Link>
+            ))}
+          </div>
+
+          <Link
+            href="/create/new"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-medium hover:brightness-110 transition-all"
+          >
+            <Wand2 className="w-4 h-4" /> Create a video
+          </Link>
+        </section>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className="p-4 rounded-2xl bg-card border border-border">
             <div className="flex items-center justify-between mb-3">
@@ -95,18 +183,22 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {projects.map((project: any) => (
-                <div key={project.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+              {projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/studio/editor?project=${project.id}`}
+                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                       <Video className="w-5 h-5 text-violet-500" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{project.name || project.title || 'Untitled'}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{project.name || project.title || 'Untitled'}</p>
                       <p className="text-xs text-muted-foreground">{project.platform || project.project_type || 'short_form'}</p>
                     </div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
+                  <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${
                     project.status === 'published' ? 'bg-emerald-500/10 text-emerald-500' :
                     project.status === 'review' ? 'bg-amber-500/10 text-amber-500' :
                     project.status === 'generating' || project.status === 'rendering' ? 'bg-violet-500/10 text-violet-500' :
@@ -114,7 +206,7 @@ export default function DashboardPage() {
                   }`}>
                     {project.status}
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -136,11 +228,15 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {trends.map((trend: any, i: number) => (
-                <div key={trend.id || i} className="p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors">
+              {trends.map((trend, i) => (
+                <Link
+                  key={trend.id || i}
+                  href={`/create/new?topic=${encodeURIComponent(trend.topic || '')}`}
+                  className="block p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                >
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium">{trend.topic}</p>
-                    <span className="text-xs font-bold text-violet-500">{trend.score || '—'}</span>
+                    <p className="text-sm font-medium truncate">{trend.topic}</p>
+                    <span className="text-xs font-bold text-violet-500 shrink-0">{trend.score || '—'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">{trend.source || 'AI Analysis'}</span>
@@ -148,7 +244,7 @@ export default function DashboardPage() {
                       <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500" style={{ width: `${trend.score || 0}%` }} />
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -156,15 +252,15 @@ export default function DashboardPage() {
       </div>
 
       <div className="p-6 rounded-2xl bg-gradient-to-r from-violet-600/10 via-purple-600/10 to-pink-600/10 border border-violet-500/20">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold">AI Recommendations</h3>
             <p className="text-sm text-muted-foreground">Create more educational content about trending topics for maximum engagement. Use the AI agents to generate scripts and storyboards automatically.</p>
           </div>
-          <Link href="/create/new" className="px-4 py-2 rounded-lg bg-violet-500/10 text-violet-500 text-sm font-medium hover:bg-violet-500/20 transition-colors">
+          <Link href="/create/new" className="px-4 py-2 rounded-lg bg-violet-500/10 text-violet-500 text-sm font-medium hover:bg-violet-500/20 transition-colors text-center shrink-0">
             Create Video
           </Link>
         </div>

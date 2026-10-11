@@ -6,6 +6,7 @@ import {
   formatDate,
   formatDuration,
   formatMs,
+  formatApiError,
 } from '@/lib/utils'
 
 describe('formatCost', () => {
@@ -57,5 +58,43 @@ describe('formatDuration', () => {
 describe('formatDate', () => {
   it('formats an ISO timestamp', () => {
     expect(formatDate('2026-09-25T10:30:00Z')).toMatch(/Sep/)
+  })
+})
+
+describe('formatApiError', () => {
+  it('returns a plain string detail as-is', () => {
+    expect(formatApiError({ detail: 'Invalid credentials' })).toBe('Invalid credentials')
+  })
+
+  it('reads a bare string', () => {
+    expect(formatApiError('Something broke')).toBe('Something broke')
+  })
+
+  it('turns FastAPI validation errors into readable text', () => {
+    const error = {
+      detail: [{ loc: ['body', 'project_id'], msg: 'Field required', type: 'missing' }],
+    }
+    expect(formatApiError(error)).toBe('project id Field required')
+  })
+
+  it('joins multiple validation errors', () => {
+    const error = {
+      detail: [
+        { loc: ['body', 'email'], msg: 'invalid email' },
+        { loc: ['body', 'password'], msg: 'too short' },
+      ],
+    }
+    expect(formatApiError(error)).toBe('email invalid email, password too short')
+  })
+
+  it('never renders "[object Object]"', () => {
+    const result = formatApiError({ detail: { weird: true } })
+    expect(result).not.toContain('[object Object]')
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('handles null and undefined', () => {
+    expect(formatApiError(null)).toMatch(/try again/i)
+    expect(formatApiError(undefined)).toMatch(/try again/i)
   })
 })

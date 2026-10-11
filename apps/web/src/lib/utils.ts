@@ -38,3 +38,54 @@ export function formatDate(date: string | Date): string {
     year: 'numeric',
   })
 }
+
+/**
+ * Turns anything the API can hand back into a sentence a non-technical user can act on.
+ * FastAPI validation errors arrive as `{ detail: [{ loc, msg, type }] }`, which used to be
+ * rendered as "[object Object]" by the old `new Error(error.detail)` call.
+ */
+export function formatApiError(input: unknown): string {
+  if (input == null) return 'Something went wrong. Please try again.'
+
+  const detail =
+    typeof input === 'object' && input !== null && 'detail' in input
+      ? (input as { detail: unknown }).detail
+      : input
+
+  if (typeof detail === 'string') return detail
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object') {
+          const obj = item as { loc?: unknown; msg?: unknown }
+          const field = Array.isArray(obj.loc) ? obj.loc[obj.loc.length - 1] : undefined
+          const msg = typeof obj.msg === 'string' ? obj.msg : 'is invalid'
+          return field ? `${String(field).replace(/_/g, ' ')} ${msg}` : msg
+        }
+        return null
+      })
+      .filter((m): m is string => Boolean(m))
+    return messages.join(', ') || 'Please check your input and try again.'
+  }
+
+  if (detail && typeof detail === 'object' && 'msg' in detail) {
+    const msg = (detail as { msg: unknown }).msg
+    if (typeof msg === 'string') return msg
+  }
+
+  return 'Something went wrong. Please try again.'
+}
+
+/** Ready-made prompts so a first-time user never faces a blank box. */
+export const VIDEO_IDEAS: string[] = [
+  '5 habits that make you successful',
+  'Why AI is changing everything',
+  'A 60-second history of the internet',
+  '3 money mistakes to avoid in your 20s',
+  'How to learn anything twice as fast',
+  'The science of a perfect morning routine',
+  'Hidden features in your phone you never use',
+  'What happens to your brain when you scroll',
+]

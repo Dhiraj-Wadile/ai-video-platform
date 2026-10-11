@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Video, FolderOpen, Plus, Clock, CheckCircle2, AlertCircle, Film, Loader2, Wand2 } from 'lucide-react'
+import { Video, FolderOpen, Plus, Clock, CheckCircle2, AlertCircle, Film, Loader2, Wand2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { api } from '@/lib/api'
 
@@ -19,34 +19,37 @@ const statusConfig: Record<string, { color: string; icon: typeof CheckCircle2 }>
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => { loadProjects() }, [])
 
   async function loadProjects() {
+    setLoading(true)
+    setError('')
     try {
       const data: any = await api.getProjects()
       const list = data.projects || data || []
       setProjects(Array.isArray(list) ? list : [])
-    } catch {
-      // Empty state on error
+    } catch (err: any) {
+      setError(err?.message || 'Could not load your projects.')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this project?')) return
+    if (!confirm('Delete this project? This cannot be undone.')) return
     try {
       await api.deleteProject(id)
       setProjects((prev) => prev.filter((p) => p.id !== id))
-    } catch {
-      // Handle error
+    } catch (err: any) {
+      setError(err?.message || 'Could not delete the project.')
     }
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Video className="w-6 h-6 text-violet-500" />
@@ -56,15 +59,27 @@ export default function ProjectsPage() {
         </div>
         <Link
           href="/create/new"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/10 text-violet-500 font-medium hover:bg-violet-500/20 transition-colors text-sm"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-violet-500/10 text-violet-500 font-medium hover:bg-violet-500/20 transition-colors text-sm"
         >
           <Plus className="w-4 h-4" /> New Project
         </Link>
       </div>
 
+      {error && (
+        <div className="p-4 rounded-2xl bg-destructive/10 text-destructive text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {error}</span>
+          <button
+            onClick={loadProjects}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 font-medium transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
-      ) : projects.length === 0 ? (
+      ) : projects.length === 0 && !error ? (
         <div className="text-center py-12">
           <Video className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-50" />
           <p className="text-muted-foreground mb-2">No projects yet</p>
