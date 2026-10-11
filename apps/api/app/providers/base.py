@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, AsyncIterator
+from typing import Any, ClassVar, Dict, List, Optional, AsyncIterator
 
 
 class ProviderTask(str, Enum):
@@ -21,6 +21,19 @@ class ProviderNotConfigured(Exception):
             f"No configured provider for task '{task.value}' "
             f"(candidates: {', '.join(candidates) or 'none'})"
         )
+
+
+class ProviderRequestError(Exception):
+    """A provider was reached but failed or returned nothing usable.
+
+    Raised instead of returning a result object with an empty url: an empty url used to
+    propagate into storage as a zero-byte file and a 200 response, which read as success.
+    """
+
+    def __init__(self, provider: str, message: str):
+        self.provider = provider
+        self.message = message
+        super().__init__(f"Provider '{provider}' failed: {message}")
 
 
 @dataclass
@@ -53,7 +66,8 @@ class ProviderInfoMixin:
     capability: Optional[ProviderTask] = None
     priority: int = 100
     is_mock: bool = False
-    models: List[str] = []
+    # ClassVar so subclasses cannot accidentally share one list between all providers.
+    models: ClassVar[List[str]] = []
 
     @classmethod
     def is_configured(cls) -> bool:

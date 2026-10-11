@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime, timezone
+import os
 
+from app.config import settings
 from app.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -15,25 +17,47 @@ from app.models.job import GenerationJob
 from app.models.quality import QualityReview
 from app.models.lineage import GenerationRecord
 from app.services.quality_service import QualityGate, _gate_passed
-from app.services.storage_service import get_storage, generate_asset_key
+from app.services.storage_service import get_storage, generate_asset_key, sign_media_url
+from app.services.pipeline import materialise_image
 from app.providers.router import provider_router
 from app.providers.base import ProviderTask
+from app.api.deps import owned_project_or_404
 
 router = APIRouter()
 
 
 class ProjectCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    project_type: str = "short_form"
-    platform: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=20_000)
+    project_type: str = Field("short_form", max_length=50)
+    platform: Optional[str] = Field(None, max_length=50)
 
 
 class ProjectUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
-    platform: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=20_000)
+    status: Optional[str] = Field(None, max_length=30)
+    platform: Optional[str] = Field(None, max_length=50)
+
+    @field_validator("status")
+    @classmethod
+    def known_status(cls, v):
+        if v is not None and v not in {s.value for s in ProjectStatus}:
+            raise ValueError(f"status must be one of {sorted(s.value for s in ProjectStatus)}")
+        return v
+
+
+class SceneUpdate(BaseModel):
+    duration: Optional[int] = Field(None, ge=1, le=120)
+    narration: Optional[str] = Field(None, max_length=10_000)
+    visual_description: Optional[str] = Field(None, max_length=10_000)
+    camera: Optional[str] = Field(None, max_length=200)
+    emotion: Optional[str] = Field(None, max_length=200)
+    background: Optional[str] = Field(None, max_length=2_000)
+    music_mood: Optional[str] = Field(None, max_length=200)
+    sfx: Optional[str] = Field(None, max_length=200)
+    caption: Optional[str] = Field(None, max_length=2_000)
+    transition: Optional[str] = Field(None, max_length=50)
 
 
 class ProjectResponse(BaseModel):
@@ -114,7 +138,11 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    for field, value in request.dict(exclude_unset=True).items():
+    for field, value in request.model_dump(exclude_unset=True).items():
+        if not hasattr(Project, field):
+            raise HTTPException(status_code=422, detail=f"Unknown field '{field}'")
+        if value is None and getattr(Project, field).nullable is False:
+            raise HTTPException(status_code=422, detail=f"Field '{field}' cannot be null")
         setattr(project, field, value)
 
     await db.flush()
@@ -139,13 +167,7 @@ async def delete_project(
 
 
 async def _owned_project(db: AsyncSession, project_id: str, user: User) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    return await owned_project_or_404(db, project_id, user)
 
 
 def _review_dict(review: Optional[QualityReview]) -> Optional[dict]:
@@ -177,7 +199,9 @@ async def get_project_quality(
 
 class QualityReviewRequest(BaseModel):
     script: Optional[str] = None
-    llm_provider: Any = None
+    # Name of a registered LLM provider. Was typed Any, which let a client install an
+    # arbitrary JSON value as the provider object and crash the request.
+    llm_provider: Optional[str] = None
 
 
 @router.post("/{project_id}/quality/review")
@@ -216,7 +240,7 @@ async def review_project_quality(
     if not script_content:
         raise HTTPException(status_code=400, detail="No script available to review; provide one in the request")
 
-    gate = QualityGate(llm_provider=request.llm_provider) if request.llm_provider else QualityGate()
+    gate = QualityGate(llm_provider_name=request.llm_provider)
     review = await gate.review(project_id, script_content, scenes_data, db, source="manual")
     await db.commit()
     return {"project_id": project_id, "review": _review_dict(review)}
@@ -322,7 +346,9 @@ async def get_project_detail(
         if a.type == "scene_image":
             sid = (a.metadata_json or {}).get("scene_id")
             if sid is not None and sid not in image_by_scene:
-                image_by_scene[int(sid)] = a.url
+                # Signed on the way out: the stored URL is a bare key, the browser gets a
+                # short-lived link it can only have obtained via an ownership check.
+                image_by_scene[int(sid)] = sign_media_url(a.url)
 
     video_assets = [a for a in assets if a.type == "video"]
 
@@ -353,8 +379,45 @@ async def get_project_detail(
             }
             for s in scenes
         ],
-        "video_url": video_assets[0].url if video_assets else None,
+        "video_url": sign_media_url(video_assets[0].url) if video_assets else None,
         "quality": _review_dict(review),
+    }
+
+
+@router.patch("/{project_id}/scenes/{scene_id}")
+async def update_scene(
+    project_id: str,
+    scene_id: str,
+    request: SceneUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _owned_project(db, project_id, user)
+    scene_result = await db.execute(
+        select(Scene).where(Scene.id == scene_id, Scene.project_id == project_id)
+    )
+    scene = scene_result.scalar_one_or_none()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    for field, value in request.model_dump(exclude_unset=True).items():
+        if not hasattr(Scene, field):
+            raise HTTPException(status_code=422, detail=f"Unknown field '{field}'")
+        setattr(scene, field, value)
+    await db.commit()
+    return {
+        "id": str(scene.id),
+        "scene_number": scene.scene_number,
+        "duration": scene.duration,
+        "narration": scene.narration,
+        "visual_description": scene.visual_description,
+        "camera": scene.camera,
+        "emotion": scene.emotion,
+        "background": scene.background,
+        "music_mood": scene.music_mood,
+        "sfx": scene.sfx,
+        "caption": scene.caption,
+        "transition": scene.transition,
     }
 
 
@@ -377,26 +440,31 @@ async def regenerate_scene_visual(
     image = provider_router.resolve(ProviderTask.IMAGE)
     prompt = scene.visual_description or scene.narration or f"Scene {scene.scene_number}"
     images = await image.generate(prompt=f"Cinematic, high quality: {prompt}", size="1080x1920")
-    if not images:
-        raise HTTPException(status_code=500, detail="Image provider returned no results")
+    # An empty url used to fall through to a zero-byte upload reported as success.
+    if not images or not images[0].url:
+        raise HTTPException(status_code=502, detail="Image provider returned no results")
     image_url = images[0].url
 
     storage = get_storage()
     key = generate_asset_key(project_id, "scene_image", "png")
-    if image_url.startswith(("http://", "https://")):
-        import httpx
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(image_url)
-            resp.raise_for_status()
-        await storage.upload(resp.content, key, "image/png")
-    else:
-        await storage.upload(b"", key, "image/png")
-    asset_url = await storage.get_url(key)
+    tmp_path = os.path.join(
+        settings.storage_dir, "projects", str(project_id), "scene", f"regen_{scene.id}.png"
+    )
+    try:
+        await materialise_image(storage, image_url, tmp_path)
+        with open(tmp_path, "rb") as f:
+            await storage.upload(f.read(), key, "image/png")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # Store the stable key; the response gets a freshly signed url.
+    stored_url = await storage.get_url(key)
+    asset_url = sign_media_url(stored_url)
 
     db.add(Asset(
         project_id=project_id,
         type="scene_image",
-        url=asset_url,
+        url=stored_url,
         metadata_json={
             "scene_id": scene.scene_number,
             "source": "regenerate",

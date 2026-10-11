@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models.user import User
 from app.core.security import create_access_token, pwd_context
@@ -39,7 +40,13 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
         password_hash=pwd_context.hash(request.password),
     )
     db.add(user)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Two concurrent registrations for the same email both clear the SELECT above; the
+        # unique constraint is what actually decides. Without this the loser saw a 500.
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     token = create_access_token(str(user.id))
     return AuthResponse(

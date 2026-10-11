@@ -44,6 +44,8 @@ def generate_word_level_captions(
     words = text.split()
     if not words:
         return []
+    if not total_duration or total_duration <= 0:
+        raise ValueError("total_duration must be greater than 0")
 
     words_per_second = len(words) / total_duration
     captions = []

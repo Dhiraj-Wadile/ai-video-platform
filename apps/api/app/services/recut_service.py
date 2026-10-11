@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -7,6 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.llm_output import coerce_float
 from app.models.asset import Asset
 from app.models.job import RenderJob
 from app.models.script import Scene, Script
@@ -72,6 +74,14 @@ class RecutService:
         images = await self._latest_scene_image(db, project_id)
 
         tmp_dir = tempfile.mkdtemp(prefix="ai_video_recut_")
+        try:
+            return await self._recut_into(project_id, db, tmp_dir, scenes_rows, images, script_row)
+        finally:
+            # Each recut holds full-resolution intermediates; without this they accumulate
+            # in the system temp directory for the lifetime of the machine.
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    async def _recut_into(self, project_id, db, tmp_dir, scenes_rows, images, script_row) -> RenderJob:
         scene_assets: list[SceneAsset] = []
         for scene in scenes_rows:
             url = images.get(scene.scene_number)
@@ -82,7 +92,7 @@ class RecutService:
                 raise ValueError(f"Scene {scene.scene_number} visual could not be resolved to a file")
             scene_assets.append(SceneAsset(
                 image_path=local,
-                duration=float(scene.duration or 3),
+                duration=coerce_float(scene.duration, 3.0) or 3.0,
                 transition=scene.transition or "fade",
             ))
 

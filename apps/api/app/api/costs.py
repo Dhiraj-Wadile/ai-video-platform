@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -17,35 +17,45 @@ async def get_global_costs(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    projects = (await db.execute(
+    project_ids = [p.id for p in (await db.execute(
         select(Project).where(Project.user_id == user.id)
-    )).scalars().all()
-    project_ids = [p.id for p in projects]
+    )).scalars().all()]
 
     totals = {"cost_cents": 0, "latency_ms": 0, "calls": 0}
     per_project = []
+    if not project_ids:
+        return {"totals": totals, "per_project": per_project}
 
-    for pid in project_ids:
-        jobs = (await db.execute(
-            select(GenerationJob).where(GenerationJob.project_id == pid)
-        )).scalars().all()
-        records = (await db.execute(
-            select(GenerationRecord).where(GenerationRecord.project_id == pid)
-        )).scalars().all()
+    # Two grouped queries in total. The previous version issued one query per project per
+    # table, so the page cost 2N+1 round trips.
+    async def aggregate(model):
+        return (await db.execute(
+            select(
+                model.project_id,
+                func.coalesce(func.sum(model.cost_cents), 0),
+                func.coalesce(func.sum(model.latency_ms), 0),
+                func.count(model.id),
+            )
+            .where(model.project_id.in_(project_ids))
+            .group_by(model.project_id)
+        )).all()
 
-        cost = sum((j.cost_cents or 0) for j in jobs) + sum((r.cost_cents or 0) for r in records)
-        latency = sum((j.latency_ms or 0) for j in jobs) + sum((r.latency_ms or 0) for r in records)
-        calls = len(jobs) + len(records)
+    combined: dict = {}
+    for pid, cost, latency, calls in await aggregate(GenerationJob):
+        combined.setdefault(str(pid), {"cost_cents": 0, "latency_ms": 0, "calls": 0})
+        combined[str(pid)].update(cost_cents=int(cost), latency_ms=int(latency), calls=int(calls))
+    for pid, cost, latency, calls in await aggregate(GenerationRecord):
+        combined.setdefault(str(pid), {"cost_cents": 0, "latency_ms": 0, "calls": 0})
+        entry = combined[str(pid)]
+        entry["cost_cents"] += int(cost)
+        entry["latency_ms"] += int(latency)
+        entry["calls"] += int(calls)
 
-        totals["cost_cents"] += cost
-        totals["latency_ms"] += latency
-        totals["calls"] += calls
-        per_project.append({
-            "project_id": str(pid),
-            "cost_cents": cost,
-            "latency_ms": latency,
-            "calls": calls,
-        })
+    for pid, agg in combined.items():
+        totals["cost_cents"] += agg["cost_cents"]
+        totals["latency_ms"] += agg["latency_ms"]
+        totals["calls"] += agg["calls"]
+        per_project.append({"project_id": pid, **agg})
 
     per_project.sort(key=lambda p: p["cost_cents"], reverse=True)
     return {"totals": totals, "per_project": per_project}

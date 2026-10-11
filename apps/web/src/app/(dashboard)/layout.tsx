@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { Video, Sparkles, TrendingUp, BarChart3, Wand2, Calendar, Settings, Bot, Users, Film, Music, Type, LogOut, Instagram } from 'lucide-react'
+import { Video, Sparkles, TrendingUp, BarChart3, Wand2, Settings, Bot, Users, Film, Type, LogOut } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 
 const navSections = [
@@ -11,9 +11,6 @@ const navSections = [
     title: 'Discover',
     items: [
       { label: 'Trends', href: '/discover/trends', icon: TrendingUp },
-      { label: 'Ideas', href: '/discover/ideas', icon: Sparkles },
-      { label: 'Opportunities', href: '/discover/opportunities', icon: BarChart3 },
-      { label: 'Instagram Reels', href: '/discover/instagram', icon: Instagram },
     ],
   },
   {
@@ -28,26 +25,19 @@ const navSections = [
   {
     title: 'Studio',
     items: [
-      { label: 'Editor', href: '/studio/editor', icon: Wand2 },
-      { label: 'Assets', href: '/studio/assets', icon: Sparkles },
-      { label: 'Audio', href: '/studio/audio', icon: Music },
-      { label: 'Captions', href: '/studio/captions', icon: Type },
+      { label: 'Scene Editor', href: '/studio/editor', icon: Wand2 },
     ],
   },
   {
     title: 'Content',
     items: [
       { label: 'Projects', href: '/content/projects', icon: Video },
-      { label: 'Calendar', href: '/content/calendar', icon: Calendar },
-      { label: 'Published', href: '/content/published', icon: BarChart3 },
     ],
   },
   {
     title: 'Analytics',
     items: [
       { label: 'Overview', href: '/analytics/overview', icon: BarChart3 },
-      { label: 'Videos', href: '/analytics/videos', icon: Video },
-      { label: 'AI Insights', href: '/analytics/insights', icon: Bot },
     ],
   },
   {
@@ -55,7 +45,6 @@ const navSections = [
     items: [
       { label: 'Agents', href: '/ai/agents', icon: Bot },
       { label: 'Runs', href: '/ai/runs', icon: Sparkles },
-      { label: 'Models', href: '/ai/models', icon: Settings },
       { label: 'Costs', href: '/ai/costs', icon: BarChart3 },
     ],
   },
@@ -64,7 +53,7 @@ const navSections = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, setUser, token } = useAppStore()
+  const { user, setUser, token, setToken } = useAppStore()
 
   useEffect(() => {
     if (!token) {
@@ -73,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [token, router])
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
+    setToken(null)
     setUser(null)
     router.push('/auth/signin')
   }
@@ -84,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen">
       <aside className="w-64 border-r border-border bg-card flex flex-col">
         <div className="p-4 border-b border-border">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>

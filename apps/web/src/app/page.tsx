@@ -48,10 +48,10 @@ export default function RootPage() {
               Start Creating Free
             </Link>
             <Link
-              href="/"
+              href="/auth/signin"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-card border border-border font-semibold text-lg hover:bg-accent transition-all"
             >
-              View Demo
+              Open your dashboard
             </Link>
           </div>
 

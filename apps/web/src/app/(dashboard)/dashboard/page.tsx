@@ -164,8 +164,8 @@ export default function DashboardPage() {
             <h3 className="font-semibold">AI Recommendations</h3>
             <p className="text-sm text-muted-foreground">Create more educational content about trending topics for maximum engagement. Use the AI agents to generate scripts and storyboards automatically.</p>
           </div>
-          <Link href="/discover/ideas" className="px-4 py-2 rounded-lg bg-violet-500/10 text-violet-500 text-sm font-medium hover:bg-violet-500/20 transition-colors">
-            Get Ideas
+          <Link href="/create/new" className="px-4 py-2 rounded-lg bg-violet-500/10 text-violet-500 text-sm font-medium hover:bg-violet-500/20 transition-colors">
+            Create Video
           </Link>
         </div>
       </div>

@@ -11,9 +11,12 @@ from app.models.types import UUIDType, JSONType
 class ProjectStatus(str, enum.Enum):
     DRAFT = "draft"
     GENERATING = "generating"
+    SCRIPT_READY = "script_ready"
+    STORYBOARD_READY = "storyboard_ready"
     REVIEW = "review"
     APPROVED = "approved"
     RENDERING = "rendering"
+    READY = "ready"
     SCHEDULED = "scheduled"
     PUBLISHED = "published"
     FAILED = "failed"
@@ -34,8 +37,8 @@ class Project(Base):
     user_id = Column(UUIDType, ForeignKey("users.id"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    status = Column(String(20), default="draft")
-    project_type = Column(String(20), default="short_form")
+    status = Column(String(30), default="draft")
+    project_type = Column(String(30), default="short_form")
     platform = Column(String(50))
     settings_json = Column(JSONType, default=dict)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

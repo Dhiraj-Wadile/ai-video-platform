@@ -1,7 +1,13 @@
 import httpx
 from typing import List
 
-from app.providers.base import ImageProvider, ImageResult, ProviderInfoMixin, ProviderTask
+from app.providers.base import (
+    ImageProvider,
+    ImageResult,
+    ProviderInfoMixin,
+    ProviderRequestError,
+    ProviderTask,
+)
 
 
 class PollinationsProvider(ImageProvider, ProviderInfoMixin):
@@ -11,6 +17,7 @@ class PollinationsProvider(ImageProvider, ProviderInfoMixin):
     vendor = "pollinations.ai"
     capability = ProviderTask.IMAGE
     priority = 20
+    models = ["flux"]
 
     async def generate(
         self,
@@ -23,9 +30,15 @@ class PollinationsProvider(ImageProvider, ProviderInfoMixin):
         encoded_prompt = prompt.replace(" ", "%20")
         url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true"
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, follow_redirects=True)
-            if response.status_code == 200:
-                return [ImageResult(url=url, revised_prompt=prompt)]
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.get(url, follow_redirects=True)
+        except httpx.HTTPError as exc:
+            raise ProviderRequestError(self.name, f"image request failed: {exc}") from exc
 
-        return [ImageResult(url="", revised_prompt=prompt)]
+        if response.status_code != 200:
+            raise ProviderRequestError(
+                self.name, f"image request returned HTTP {response.status_code}"
+            )
+
+        return [ImageResult(url=url, revised_prompt=prompt)]

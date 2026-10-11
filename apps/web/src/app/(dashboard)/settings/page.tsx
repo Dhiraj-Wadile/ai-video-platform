@@ -1,8 +1,46 @@
 'use client'
 
-import { Settings, User, Key, Bell, Shield, Palette } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Settings, Cpu, CheckCircle2, XCircle, Loader2, AlertCircle, User, ShieldCheck } from 'lucide-react'
+import { api } from '@/lib/api'
+import { useAppStore } from '@/lib/store'
+
+interface ProviderInfo {
+  name: string
+  task: string
+  vendor: string
+  models: string[]
+  configured: boolean
+  enabled: boolean
+  is_mock: boolean
+  priority: number
+}
 
 export default function SettingsPage() {
+  const { user } = useAppStore()
+  const [providers, setProviders] = useState<ProviderInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    try {
+      const data: any = await api.getProviders()
+      setProviders(Array.isArray(data.providers) ? data.providers : [])
+    } catch (err: any) {
+      setError(err.message || 'Could not load provider status')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const byTask = providers.reduce((acc: Record<string, ProviderInfo[]>, p) => {
+    (acc[p.task] = acc[p.task] || []).push(p)
+    return acc
+  }, {})
+  const live = providers.filter((p) => p.configured && !p.is_mock).length
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -10,94 +48,91 @@ export default function SettingsPage() {
           <Settings className="w-6 h-6 text-violet-500" />
           Settings
         </h1>
-        <p className="text-sm text-muted-foreground">Manage your account and platform settings</p>
+        <p className="text-sm text-muted-foreground">Your account and the providers powering generation</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <nav className="space-y-1">
-          {[
-            { icon: User, label: 'Profile' },
-            { icon: Key, label: 'API Keys' },
-            { icon: Bell, label: 'Notifications' },
-            { icon: Shield, label: 'Security' },
-            { icon: Palette, label: 'Appearance' },
-          ].map(({ icon: Icon, label }) => (
-            <button key={label} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-left">
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
-        </nav>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="p-4 rounded-2xl bg-card border border-border space-y-3 h-fit">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <User className="w-4 h-4" /> Account
+          </h2>
+          <div className="text-sm space-y-1">
+            <p className="font-medium">{user?.name || 'Signed in'}</p>
+            <p className="text-muted-foreground break-all">{user?.email}</p>
+          </div>
+          <div className="flex items-start gap-2 pt-3 border-t border-border">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Provider credentials live on the server only. They are never sent to this browser.
+            </p>
+          </div>
+        </div>
 
-        <div className="lg:col-span-3 space-y-4">
-          <div className="p-6 rounded-2xl bg-card border border-border space-y-4">
-            <h2 className="font-semibold">Profile</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Name</label>
-                <input defaultValue="John Doe" className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm" />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Email</label>
-                <input defaultValue="john@example.com" className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm" />
-              </div>
-            </div>
-            <button className="px-4 py-2 rounded-xl bg-violet-500 text-white text-sm font-medium hover:brightness-110 transition-all">
-              Save Changes
-            </button>
+        <div className="lg:col-span-2 p-4 rounded-2xl bg-card border border-border space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <Cpu className="w-4 h-4" /> AI Providers
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {live} live &middot; {providers.length} registered
+            </span>
           </div>
 
-          <div className="p-6 rounded-2xl bg-card border border-border space-y-4">
-            <h2 className="font-semibold">API Keys</h2>
-            <div className="space-y-3">
-              {['OpenAI', 'ElevenLabs', 'Anthropic'].map((provider) => (
-                <div key={provider} className="flex items-center gap-3">
-                  <span className="w-24 text-sm font-medium">{provider}</span>
-                  <input type="password" placeholder="sk-..." className="flex-1 px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-mono" />
-                  <button className="px-3 py-2 rounded-xl bg-muted text-sm hover:bg-accent transition-colors">Test</button>
+          {error && (
+            <div className="p-3 rounded-xl bg-destructive/10 text-destructive text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : providers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No providers registered.</p>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(byTask).map(([task, list]) => (
+                <div key={task}>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">{task}</p>
+                  <div className="space-y-2">
+                    {list.map((p) => (
+                      <div key={p.name} className="p-3 rounded-xl bg-muted/40 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {p.name}
+                            {p.is_mock && (
+                              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500">
+                                mock
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {p.vendor}
+                            {p.models.length > 0 ? ` · ${p.models.join(', ')}` : ''}
+                          </p>
+                        </div>
+                        {p.configured ? (
+                          <span className="flex items-center gap-1 text-xs text-emerald-500 shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                            <XCircle className="w-3.5 h-3.5" /> No key set
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
 
-          <div className="p-6 rounded-2xl bg-card border border-border space-y-4">
-            <h2 className="font-semibold">Default Settings</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Default Duration</label>
-                <select className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm">
-                  <option>15 seconds</option>
-                  <option selected>30 seconds</option>
-                  <option>45 seconds</option>
-                  <option>60 seconds</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Default Style</label>
-                <select className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm">
-                  <option selected>Educational</option>
-                  <option>Comedy</option>
-                  <option>Storytelling</option>
-                  <option>Motivational</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Quality Mode</label>
-                <select className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm">
-                  <option>Cheap</option>
-                  <option selected>Balanced</option>
-                  <option>High Quality</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Default Platform</label>
-                <select className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm">
-                  <option selected>YouTube Shorts</option>
-                  <option>Instagram Reels</option>
-                  <option>TikTok</option>
-                </select>
-              </div>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground pt-3 border-t border-border">
+            Providers are selected automatically by capability and priority. A provider without a server-side
+            key is skipped, and mock providers are only used as a last resort.
+          </p>
         </div>
       </div>
     </div>

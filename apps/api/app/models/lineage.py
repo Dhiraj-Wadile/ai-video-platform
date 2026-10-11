@@ -10,7 +10,7 @@ class GenerationRecord(Base):
     __tablename__ = "generation_records"
 
     id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(UUIDType, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(UUIDType, ForeignKey("projects.id"), nullable=False, index=True)
     task = Column(String(30), nullable=False)
     provider = Column(String(50), nullable=False)
     model = Column(String(100))

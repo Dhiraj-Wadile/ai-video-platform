@@ -1,5 +1,5 @@
-import json
 from app.agents.base import BaseAgent, AgentInput, AgentOutput
+from app.core.llm_output import parse_json_object
 
 
 class ScriptAgent(BaseAgent):
@@ -52,9 +52,8 @@ Return ONLY valid JSON with this structure:
         ]
 
     def parse_response(self, content: str) -> AgentOutput:
-        try:
-            cleaned = content.replace("```json\n", "").replace("```\n", "").strip()
-            data = json.loads(cleaned)
-            return AgentOutput(content=content, structured_data=data)
-        except json.JSONDecodeError:
+        data = parse_json_object(content)
+        # No JSON at all: treat the raw text as the script rather than losing it.
+        if not data:
             return AgentOutput(content=content, structured_data={"full_script": content})
+        return AgentOutput(content=content, structured_data=data)

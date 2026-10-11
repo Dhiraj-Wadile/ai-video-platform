@@ -140,7 +140,14 @@ async def test_render_project_task_runs_pipeline(client: AsyncClient, monkeypatc
 
     class FakePollinations:
         async def generate(self, prompt, size="1080x1920", quality="standard", n=1):
-            return [ImageResult(url="https://example.com/placeholder.png")]
+            # The pipeline materialises images locally, so the fake needs a real file.
+            import os
+            from app.services.storage_service import LocalStorage
+            path = os.path.join(LocalStorage().base_dir, "fake", "placeholder.png")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(b"\x89PNG\r\n\x1a\nfake-image")
+            return [ImageResult(url="/storage/fake/placeholder.png")]
 
     class FakeRenderer:
         def __init__(self, config=None):
@@ -263,8 +270,10 @@ async def test_render_status_includes_progress_message(client: AsyncClient, monk
 
         async def run(self, project_id, topic, duration="30s", style="educational", db=None, on_progress=None):
             if on_progress:
-                on_progress(50, "Generating scene visuals...")
-                on_progress(100, "Pipeline complete!")
+                # on_progress is a coroutine in the synchronous render path: it commits so
+                # that a concurrent GET /status can observe the step.
+                await on_progress(50, "Generating scene visuals...")
+                await on_progress(100, "Pipeline complete!")
             return PipelineResult(project_id=project_id, status="completed", video_path="x.mp4")
 
     monkeypatch.setattr("app.api.render.VideoPipeline", FakeVideoPipeline)

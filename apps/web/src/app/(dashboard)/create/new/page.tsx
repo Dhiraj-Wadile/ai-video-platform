@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Wand2, Sparkles, Loader2, Video, Clock, BarChart3, CheckCircle2, AlertCircle } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -13,6 +14,9 @@ export default function NewVideoPage() {
   const [platform, setPlatform] = useState('instagram_reels')
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState<{ step: string; done: boolean }[]>([])
+  const [percent, setPercent] = useState(0)
+  const [stageMessage, setStageMessage] = useState('')
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const steps = [
@@ -23,6 +27,14 @@ export default function NewVideoPage() {
     'Rendering video...',
     'Finalizing...',
   ]
+
+  const stepThresholds = [0, 5, 16, 31, 61, 96]
+
+  const updateProgress = (value: number, completed: boolean) => {
+    const safe = Math.max(0, Math.min(100, value ?? 0))
+    setPercent(completed ? 100 : safe)
+    setProgress((p) => p.map((s, i) => ({ ...s, done: completed || safe >= stepThresholds[i] })))
+  }
 
   const handleGenerate = async () => {
     if (!topic.trim()) return
@@ -39,20 +51,46 @@ export default function NewVideoPage() {
         platform,
       })
       setProgress((p) => p.map((s, i) => i === 0 ? { ...s, done: true } : s))
+      setCreatedProjectId(project.id)
 
-      // Step 2-5: Start render pipeline
+      // Step 2: Start render pipeline
       const result: any = await api.startRender({
         project_id: project.id,
         topic,
         duration,
         style,
       })
-      setProgress((p) => p.map((s) => ({ ...s, done: true })))
 
-      // Success
-      setTimeout(() => {
-        router.push('/content/projects')
-      }, 1500)
+      // Async mode: poll real progress; sync mode completes immediately.
+      if (result.status === 'queued' && result.job_id) {
+        setProgress((p) => p.map((s, i) => i === 1 ? { ...s, done: false } : s))
+        for (let i = 0; i < 300; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          const status: any = await api.getRenderStatus(result.job_id)
+
+          if (status.status === 'completed') {
+            updateProgress(100, true)
+            router.push(`/studio/editor?project=${project.id}`)
+            return
+          }
+          if (status.status === 'failed') {
+            setError('Render failed: ' + (status.error || 'unknown error'))
+            setProgress((p) => p.map((s) => ({ ...s, done: false })))
+            setGenerating(false)
+            return
+          }
+          if (status.progress_message) setStageMessage(status.progress_message)
+          updateProgress(status.progress ?? 0, false)
+        }
+        setError('Render is taking longer than expected. Open the project to check on it.')
+        setGenerating(false)
+        return
+      } else {
+        updateProgress(100, true)
+        setTimeout(() => {
+          router.push(`/studio/editor?project=${project.id}`)
+        }, 1200)
+      }
     } catch (err: any) {
       setError(err.message || 'Generation failed')
       setProgress((p) => p.map((s) => ({ ...s, done: false })))
@@ -73,8 +111,16 @@ export default function NewVideoPage() {
 
       <div className="p-6 rounded-2xl bg-card border border-border space-y-6">
         {error && (
-          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2">
+          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2 flex-wrap">
             <AlertCircle className="w-4 h-4" /> {error}
+            {createdProjectId && (
+              <Link
+                href={`/studio/editor?project=${createdProjectId}`}
+                className="text-violet-500 hover:underline font-medium"
+              >
+                Open project
+              </Link>
+            )}
           </div>
         )}
 
@@ -132,17 +178,29 @@ export default function NewVideoPage() {
         </div>
 
         {generating && progress.length > 0 && (
-          <div className="space-y-2">
-            {progress.map((step, i) => (
-              <div key={i} className="flex items-center gap-3 text-sm">
-                {step.done ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                ) : (
-                  <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
-                )}
-                <span className={step.done ? 'text-muted-foreground line-through' : ''}>{step.step}</span>
-              </div>
-            ))}
+          <div className="space-y-3">
+            <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full transition-all duration-500"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{stageMessage || steps.find((_, i) => !progress[i]?.done) || 'Working...'}</span>
+              <span>{percent}%</span>
+            </div>
+            <div className="space-y-2">
+              {progress.map((step, i) => (
+                <div key={i} className="flex items-center gap-3 text-sm">
+                  {step.done ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+                  )}
+                  <span className={step.done ? 'text-muted-foreground line-through' : ''}>{step.step}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

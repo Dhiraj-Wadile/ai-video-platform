@@ -5,9 +5,9 @@ from httpx import AsyncClient, ASGITransport
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
-os.environ["REDIS_URL"] = "redis://localhost:6379"
-os.environ["JWT_SECRET"] = "test-secret-key"
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
+os.environ.setdefault("JWT_SECRET", "test-secret-key")
 
 from app.main import app
 from app.database import engine, Base

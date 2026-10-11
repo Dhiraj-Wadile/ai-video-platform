@@ -49,3 +49,16 @@ server_err.log
 
 # Storage
 apps/api/storage/
+/storage/
+
+# E2E / local scratch artifacts
+_e2e_*
+*.err
+apps/api/_e2e_storage/
+
+# Generated media scratch (test renders, audio)
+audio_concat_*.txt
+audio_job*.mp3
+narr.mp3
+silence_*.mp3
+video_audio_*.mp4

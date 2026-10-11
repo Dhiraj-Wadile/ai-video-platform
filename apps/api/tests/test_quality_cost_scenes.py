@@ -1,5 +1,6 @@
 import json
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -77,7 +78,16 @@ class FakePollinations:
     name = "pollinations"
 
     async def generate(self, prompt: str, size: str = "1080x1920", quality: str = "standard", n: int = 1):
-        return [ImageResult(url="/storage/fake/generated.png")]
+        # The pipeline materialises every image on local disk before ffmpeg sees it, so the
+        # fake must point at a file that actually exists.
+        from app.services.storage_service import LocalStorage
+        base = LocalStorage().base_dir
+        key = "fake/generated.png"
+        path = os.path.join(base, key)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\nfake-image")
+        return [ImageResult(url=f"/storage/{key}")]
 
 
 class FakeRenderer:
@@ -421,6 +431,11 @@ class _FakeAgent:
 
 
 class FakeGate:
+    # The endpoint now always passes llm_provider_name (a provider *name*, not an object),
+    # so the fake has to accept it.
+    def __init__(self, llm_provider_name=None):
+        self.llm_provider_name = llm_provider_name
+
     async def review(self, project_id, script, scenes, db, source="manual"):
         from app.services.quality_service import _gate_passed
         review = QualityReview(

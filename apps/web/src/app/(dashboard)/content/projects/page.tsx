@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Video, FolderOpen, Plus, Clock, CheckCircle2, AlertCircle, Film, Loader2 } from 'lucide-react'
+import { Video, FolderOpen, Plus, Clock, CheckCircle2, AlertCircle, Film, Loader2, Wand2 } from 'lucide-react'
 import Link from 'next/link'
 import { api } from '@/lib/api'
 
@@ -76,24 +76,32 @@ export default function ProjectsPage() {
             const config = statusConfig[project.status] || statusConfig.draft
             const StatusIcon = config.icon
             return (
-              <div key={project.id} className="p-5 rounded-2xl bg-card border border-border hover:border-violet-500/30 transition-colors cursor-pointer">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center">
+              <div key={project.id} className="p-5 rounded-2xl bg-card border border-border hover:border-violet-500/30 transition-colors">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
                       <Video className="w-6 h-6 text-violet-500" />
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{project.name || 'Untitled'}</h3>
-                      <p className="text-sm text-muted-foreground">{project.platform || project.project_type || 'short_form'} &middot; {project.status}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold truncate">{project.name || 'Untitled'}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {project.platform || project.project_type || 'short_form'} &middot; {project.status}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${config.color}`}>
                       <StatusIcon className="w-3 h-3" />
                       {project.status}
                     </span>
+                    <Link
+                      href={`/studio/editor?project=${project.id}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-accent transition-colors"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" /> Open
+                    </Link>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(project.id) }}
+                      onClick={() => handleDelete(project.id)}
                       className="text-xs text-muted-foreground hover:text-destructive transition-colors"
                     >
                       Delete

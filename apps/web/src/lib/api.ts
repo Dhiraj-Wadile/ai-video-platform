@@ -84,9 +84,21 @@ export const api = {
 
   getProjects: () => request('/api/projects'),
   getProject: (id: string) => request(`/api/projects/${id}`),
+  getProjectDetail: (id: string) => request(`/api/projects/${id}/detail`),
   createProject: (data: any) => request('/api/projects', { method: 'POST', body: data }),
   updateProject: (id: string, data: any) => request(`/api/projects/${id}`, { method: 'PATCH', body: data }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
+
+  updateScene: (projectId: string, sceneId: string, data: any) =>
+    request(`/api/projects/${projectId}/scenes/${sceneId}`, { method: 'PATCH', body: data }),
+  regenerateScene: (projectId: string, sceneId: string) =>
+    request(`/api/projects/${projectId}/scenes/${sceneId}/regenerate`, { method: 'POST' }),
+
+  getProjectQuality: (id: string) => request(`/api/projects/${id}/quality`),
+  reviewProjectQuality: (id: string) =>
+    request(`/api/projects/${id}/quality/review`, { method: 'POST', body: {} }),
+  getProjectCosts: (id: string) => request(`/api/projects/${id}/costs`),
+  getProjectLineage: (id: string) => request(`/api/projects/${id}/lineage`),
 
   generateScript: (data: any) => request('/api/scripts/generate', { method: 'POST', body: data }),
   getScript: (id: string) => request(`/api/scripts/${id}`),
@@ -109,9 +121,13 @@ export const api = {
 
   startRender: (data: any) => request('/api/render/start', { method: 'POST', body: data }),
   getRenderStatus: (jobId: string) => request(`/api/render/status/${jobId}`),
+  recut: (projectId: string) => request('/api/render/recut', { method: 'POST', body: { project_id: projectId } }),
 
   getAnalytics: () => request('/api/analytics'),
   getVideoAnalytics: (projectId: string) => request(`/api/analytics/${projectId}`),
+
+  getCosts: () => request('/api/costs'),
+  getProviders: () => request('/api/providers'),
 
   getPrompts: () => request('/api/prompts'),
   updatePrompt: (id: string, data: any) => request(`/api/prompts/${id}`, { method: 'PATCH', body: data }),

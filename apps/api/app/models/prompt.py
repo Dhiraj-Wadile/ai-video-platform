@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Text, Boolean, Integer
+from sqlalchemy import Column, String, DateTime, Text, Boolean, Integer, ForeignKey
 
 from app.database import Base
 from app.models.types import UUIDType
@@ -15,5 +15,9 @@ class PromptTemplate(Base):
     content = Column(Text, nullable=False)
     version = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
+    # NULL marks a global template: readable by everyone, writable by nobody individually.
+    # Without an owner column any authenticated user could rewrite prompts that every other
+    # account reads.
+    user_id = Column(UUIDType, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

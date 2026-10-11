@@ -43,8 +43,10 @@ class RenderResult:
 class VideoRenderer:
     def __init__(self, config: Optional[RenderConfig] = None):
         self.config = config or RenderConfig()
-        self.temp_dir = tempfile.mkdtemp(prefix="ai_video_render_")
+        # Check ffmpeg *before* allocating a temp dir; the check raises, and a directory
+        # created just before a raise was never cleaned up.
         self._ensure_ffmpeg()
+        self.temp_dir = tempfile.mkdtemp(prefix="ai_video_render_")
 
     def _ensure_ffmpeg(self):
         try:
@@ -61,6 +63,10 @@ class VideoRenderer:
         captions: Optional[List[CaptionEntry]] = None,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> RenderResult:
+        # Every progress calculation below divides by len(scenes).
+        if not scenes:
+            raise ValueError("Cannot render a video with no scenes")
+
         job_id = str(uuid.uuid4())[:8]
         slides_dir = os.path.join(self.temp_dir, f"slides_{job_id}")
         os.makedirs(slides_dir, exist_ok=True)
@@ -195,22 +201,37 @@ class VideoRenderer:
         return output
 
     async def _add_audio(self, video_path: str, scenes: List[SceneAsset], job_id: str) -> str:
-        audio_paths = [s.narration_audio_path for s in scenes if s.narration_audio_path]
-        if not audio_paths:
+        """Build one narration track aligned to the scene timeline.
+
+        Concatenating only the scenes that happen to have audio shifts every later scene's
+        narration earlier than its picture, so a gap is filled with generated silence and
+        the track is muxed in scene order.
+        """
+        if not any(s.narration_audio_path for s in scenes):
             return video_path
 
-        merged_audio = os.path.join(self.temp_dir, f"audio_{job_id}.mp3")
+        aligned: List[str] = []
+        for i, scene in enumerate(scenes):
+            if scene.narration_audio_path and os.path.exists(scene.narration_audio_path):
+                aligned.append(scene.narration_audio_path)
+            else:
+                silent = os.path.join(self.temp_dir, f"silence_{job_id}_{i:03d}.mp3")
+                await self._create_silence(silent, scene.duration)
+                aligned.append(silent)
+
         concat_audio = os.path.join(self.temp_dir, f"audio_concat_{job_id}.txt")
         with open(concat_audio, "w") as f:
-            for ap in audio_paths:
+            for ap in aligned:
                 f.write(f"file '{ap}'\n")
 
+        merged_audio = os.path.join(self.temp_dir, f"audio_{job_id}.mp3")
         cmd = [
             "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", concat_audio,
-            "-c", "copy",
+            "-c:a", self.config.audio_codec,
+            "-b:a", self.config.audio_bitrate,
             merged_audio,
         ]
         await self._run_ffmpeg(cmd)
@@ -220,14 +241,26 @@ class VideoRenderer:
             "ffmpeg", "-y",
             "-i", video_path,
             "-i", merged_audio,
+            "-map", "0:v",
+            "-map", "1:a",
             "-c:v", "copy",
             "-c:a", self.config.audio_codec,
             "-b:a", self.config.audio_bitrate,
-            "-shortest",
             output,
         ]
         await self._run_ffmpeg(cmd)
         return output
+
+    async def _create_silence(self, output_path: str, duration: float) -> None:
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-t", str(duration),
+            "-c:a", self.config.audio_codec,
+            output_path,
+        ]
+        await self._run_ffmpeg(cmd)
 
     async def _mix_music(self, video_path: str, music_path: str, volume: float, job_id: str) -> str:
         output = os.path.join(self.temp_dir, f"video_music_{job_id}.mp4")

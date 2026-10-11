@@ -14,6 +14,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const setUser = useAppStore((s) => s.setUser)
+  const setToken = useAppStore((s) => s.setToken)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,9 +23,9 @@ export default function SignInPage() {
     setError('')
     try {
       const data: any = await api.login(email, password)
-      localStorage.setItem('token', data.access_token)
+      setToken(data.access_token)
       setUser(data.user)
-      router.push('/')
+      router.push('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {

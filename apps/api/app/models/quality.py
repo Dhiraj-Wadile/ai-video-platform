@@ -10,7 +10,7 @@ class QualityReview(Base):
     __tablename__ = "quality_reviews"
 
     id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(UUIDType, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(UUIDType, ForeignKey("projects.id"), nullable=False, index=True)
     overall_score = Column(Integer, nullable=False)
     breakdown_json = Column(JSONType)
     problems_json = Column(JSONType)

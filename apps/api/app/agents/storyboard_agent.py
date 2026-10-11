@@ -1,5 +1,6 @@
 import json
 from app.agents.base import BaseAgent, AgentInput, AgentOutput
+from app.core.llm_output import parse_json
 
 
 class StoryboardAgent(BaseAgent):
@@ -64,10 +65,16 @@ Return ONLY valid JSON array of scenes:
         ]
 
     def parse_response(self, content: str) -> AgentOutput:
-        try:
-            cleaned = content.replace("```json\n", "").replace("```\n", "").strip()
-            data = json.loads(cleaned)
-            scenes = data if isinstance(data, list) else data.get("scenes", [data])
-            return AgentOutput(content=content, structured_data={"scenes": scenes})
-        except json.JSONDecodeError:
+        data = parse_json(content)
+        if data is None:
             return AgentOutput(content=content, structured_data={"scenes": []})
+        if isinstance(data, list):
+            scenes = data
+        elif isinstance(data, dict):
+            scenes = data.get("scenes", [data])
+        else:
+            scenes = []
+        return AgentOutput(
+            content=content,
+            structured_data={"scenes": scenes if isinstance(scenes, list) else []},
+        )

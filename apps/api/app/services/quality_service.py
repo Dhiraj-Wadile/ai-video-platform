@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from app.agents.registry import get_agent
 from app.config import settings
+from app.core.llm_output import as_dict, coerce_int
 from app.models.quality import QualityReview
 from app.models.project import Project
 
@@ -13,8 +14,11 @@ def _gate_passed(review: QualityReview) -> bool:
 
 
 class QualityGate:
-    def __init__(self, llm_provider=None):
-        self.llm = llm_provider
+    def __init__(self, llm_provider_name: Optional[str] = None):
+        # A provider *name*, resolved through the router. Accepting a provider instance
+        # here meant a client could post an arbitrary JSON value and have it installed
+        # as the LLM, which failed at the first .complete() call.
+        self.llm_provider_name = llm_provider_name
 
     async def review(
         self,
@@ -27,7 +31,7 @@ class QualityGate:
         from app.providers.router import provider_router
         from app.providers.base import ProviderTask
 
-        llm = self.llm or provider_router.resolve(ProviderTask.LLM)
+        llm = provider_router.resolve(ProviderTask.LLM, name=self.llm_provider_name)
         agent = get_agent("quality", llm)
 
         result = await agent.run({
@@ -35,10 +39,12 @@ class QualityGate:
             "context": {"scenes": scenes or []},
         })
 
-        data = result.structured_data or {}
+        # The quality agent asks for an object but a list/scalar is a valid model
+        # response; as_dict guarantees the .get calls below cannot raise.
+        data = as_dict(result.structured_data)
         review = QualityReview(
             project_id=project_id,
-            overall_score=int(data.get("overall_score", 0) or 0),
+            overall_score=coerce_int(data.get("overall_score"), 0) or 0,
             breakdown_json=data.get("breakdown") or {},
             problems_json=data.get("problems") or [],
             recommendations_json=data.get("recommendations") or [],

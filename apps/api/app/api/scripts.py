@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.llm_output import coerce_int
 from app.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.script import Script
 from app.models.project import Project
 from app.agents.registry import get_agent
-from app.providers.llm.openai import OpenAIProvider
+from app.providers.base import ProviderTask
+from app.providers.router import get_provider
 
 router = APIRouter()
 
@@ -28,7 +30,10 @@ class ScriptResponse(BaseModel):
     title: Optional[str] = None
     content: str
     duration: Optional[int] = None
-    sections: Optional[dict] = None
+    # The prompt asks for an object but models routinely return a list of section
+    # dicts; the column is JSON so either round-trips, and typing it as dict made a
+    # valid response a 500.
+    sections: Optional[Any] = None
 
 
 @router.post("/generate", response_model=ScriptResponse)
@@ -37,7 +42,7 @@ async def generate_script(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    llm = OpenAIProvider()
+    llm = get_provider(ProviderTask.LLM)
     agent = get_agent("script", llm)
 
     result = await agent.run({
@@ -50,6 +55,10 @@ async def generate_script(
     })
 
     data = result.structured_data or {}
+    # "30s" / "30 seconds" are as likely as 30; the column is an integer.
+    duration = coerce_int(data.get("duration"))
+    body = data.get("full_script") or result.content or ""
+    title = data.get("title") or request.topic
 
     script_id = None
     if request.project_id:
@@ -62,9 +71,9 @@ async def generate_script(
 
         script = Script(
             project_id=request.project_id,
-            title=data.get("title", request.topic),
-            content=data.get("full_script", result.content),
-            duration=data.get("duration"),
+            title=title,
+            content=body,
+            duration=duration,
             structure_json=data.get("sections"),
         )
         db.add(script)
@@ -74,9 +83,9 @@ async def generate_script(
 
     return ScriptResponse(
         id=script_id,
-        title=data.get("title", request.topic),
-        content=data.get("full_script", result.content),
-        duration=data.get("duration"),
+        title=title,
+        content=body,
+        duration=duration,
         sections=data.get("sections"),
     )
 
@@ -87,7 +96,11 @@ async def get_script(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Script).where(Script.id == script_id))
+    result = await db.execute(
+        select(Script)
+        .join(Project, Project.id == Script.project_id)
+        .where(Script.id == script_id, Project.user_id == user.id)
+    )
     script = result.scalar_one_or_none()
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")

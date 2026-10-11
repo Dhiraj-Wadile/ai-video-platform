@@ -71,7 +71,15 @@ class SequenceOpenAI(LLMProvider):
 
 class FakePollinations:
     async def generate(self, prompt: str, size: str = "1080x1920", quality: str = "standard", n: int = 1):
-        return [ImageResult(url="https://example.com/placeholder.png")]
+        # The pipeline downloads every image to local disk before ffmpeg runs, so the fake
+        # has to point at a real file.
+        import os
+        from app.services.storage_service import LocalStorage
+        path = os.path.join(LocalStorage().base_dir, "fake", "placeholder.png")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\nfake-image")
+        return [ImageResult(url="/storage/fake/placeholder.png")]
 
 
 class FakeRenderer:
@@ -126,7 +134,7 @@ class FakeRouter:
 
 @pytest.mark.anyio
 async def test_scripts_generate_persists_script(client: AsyncClient, monkeypatch):
-    monkeypatch.setattr("app.api.scripts.OpenAIProvider", SequenceOpenAI)
+    monkeypatch.setattr("app.api.scripts.get_provider", lambda task, name=None: SequenceOpenAI())
     token = await get_token(client)
 
     proj = await client.post("/api/projects", json={"name": "P", "project_type": "short_form"}, headers=auth_headers(token))
@@ -154,7 +162,7 @@ async def test_scripts_generate_persists_script(client: AsyncClient, monkeypatch
 
 @pytest.mark.anyio
 async def test_scripts_generate_without_project_does_not_persist(client: AsyncClient, monkeypatch):
-    monkeypatch.setattr("app.api.scripts.OpenAIProvider", SequenceOpenAI)
+    monkeypatch.setattr("app.api.scripts.get_provider", lambda task, name=None: SequenceOpenAI())
     token = await get_token(client)
 
     resp = await client.post("/api/scripts/generate", json={"topic": "winter hiking"}, headers=auth_headers(token))
@@ -165,7 +173,7 @@ async def test_scripts_generate_without_project_does_not_persist(client: AsyncCl
 
 @pytest.mark.anyio
 async def test_scripts_generate_rejects_foreign_project(client: AsyncClient, monkeypatch):
-    monkeypatch.setattr("app.api.scripts.OpenAIProvider", SequenceOpenAI)
+    monkeypatch.setattr("app.api.scripts.get_provider", lambda task, name=None: SequenceOpenAI())
     token_a = await get_token(client, email="owner@example.com")
     proj = await client.post("/api/projects", json={"name": "P", "project_type": "short_form"}, headers=auth_headers(token_a))
     pid = proj.json()["id"]

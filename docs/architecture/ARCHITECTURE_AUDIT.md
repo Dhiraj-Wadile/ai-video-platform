@@ -330,12 +330,24 @@ Methods **actually called** (11/25): `register, login, getProjects, createProjec
 | **4** | Boundaries | Normalize `GenerationResult`, formalize provider capability protocols, provider router | ✅ done (`docs/changes/0004-…`) |
 | **5** | Higgsfield | Adapter behind provider boundary per current official docs; MCP for tool use | ✅ done — adapter shipped (`docs/changes/0005-…`); MCP server deferred to a standalone phase |
 | **6** | Quality + cost + scenes | Structured QA, cost tracking, scene regeneration, generation lineage | ✅ done (`docs/changes/0006-…`) |
-| **7** | Product UX | Real studio view (scenes editable/regeneratable), progress clarity, remove/retire dead screens | ⏳ next |
-| **8** | Hardening | Security, tests around failure modes, lint/typecheck/build/tests in CI, README truth | pending |
+| **7** | Product UX | Real studio view (scenes editable/regeneratable), progress clarity, remove/retire dead screens | ✅ done (`docs/changes/0007-product-ux.md`) |
+| **8** | Hardening | Security, tests around failure modes, lint/typecheck/build/tests in CI, README truth | ✅ done (`docs/changes/0008-hardening.md`) |
 
 Each phase gets a small spec in `docs/specs/` + a change log entry in `docs/changes/` before implementation, and passes lint/tests/build before completion.
 
-> **Run finalization (2026-09-25):** the SDD run covers **Phases 0–6** and continues through Phases 7
-> and 8. If it stops after the remaining UX (7) and hardening (8) phases, the deliverable set is
-> complete; pending follow-ups of note: blocking quality gates wired into the product flow, MCP
-> tool-use server, and Postgres-only baseline migrations (JSONB) to make the alembic chain portable.
+### 11.1 What phases 7–8 changed about this plan
+
+- **The "20 static screens" number was 11.** Phase 7 wired the three that had a real endpoint behind
+  them (Characters, Storyboard, Settings) and deleted the other 11; the dashboard is now 16 routes,
+  every one backed by an endpoint. The unauthenticated `/` marketing page was also shadowing the
+  authenticated dashboard — both resolved to `/`; the dashboard moved to `/dashboard`.
+- **Section 9's "latent bug" in `render/status` was only the visible one.** Phase 8 found the same
+  route also had no ownership check (any user could read any job), alongside three more endpoints
+  with the same class of bug. `app/api/deps.py` now owns that predicate.
+- **CI was reporting a PostgreSQL run that was SQLite.** `tests/conftest.py` overwrote
+  `DATABASE_URL`, so the "Run tests (PostgreSQL)" step never touched Postgres; the Postgres-only
+  baseline note below is now backed by a real job (and by a `str ↔ uuid` column coercion that run
+  required).
+- **Still open** (unchanged from the original plan): blocking quality gates wired into the product
+  flow, the MCP tool-use server, and a Postgres-verified baseline migration (the 001–004 chain still
+  assumes SQLite-friendly types).

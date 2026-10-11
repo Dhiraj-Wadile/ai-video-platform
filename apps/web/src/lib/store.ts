@@ -23,12 +23,32 @@ interface AppState {
   setGeneratingJob: (job: any | null) => void
 }
 
+/** The session is restored on reload; without this the dashboard guard bounces signed-in users out. */
+function readStoredUser(): User | null {
+  if (typeof window === 'undefined') return null
+  if (!localStorage.getItem('token')) return null
+  try {
+    const raw = localStorage.getItem('user')
+    return raw ? (JSON.parse(raw) as User) : null
+  } catch {
+    localStorage.removeItem('user')
+    return null
+  }
+}
+
 export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: true,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
-  user: null,
-  setUser: (user) => set({ user }),
+  user: readStoredUser(),
+  setUser: (user) => {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user))
+    } else {
+      localStorage.removeItem('user')
+    }
+    set({ user })
+  },
 
   token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
   setToken: (token) => {
@@ -36,8 +56,9 @@ export const useAppStore = create<AppState>((set) => ({
       localStorage.setItem('token', token)
     } else {
       localStorage.removeItem('token')
+      localStorage.removeItem('user')
     }
-    set({ token })
+    set({ token, user: token ? useAppStore.getState().user : null })
   },
 
   currentProject: null,

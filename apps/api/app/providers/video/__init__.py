@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Optional
 
-from app.providers.base import VideoProvider, VideoResult, ProviderInfoMixin, ProviderTask
+from app.providers.base import VideoProvider, VideoResult, ProviderInfoMixin, ProviderRequestError, ProviderTask
 from app.config import settings
 
 
@@ -87,6 +87,8 @@ class RunwayVideoProvider(VideoProvider, ProviderInfoMixin):
             response.raise_for_status()
             data = response.json()
             task_id = data.get("id", "")
+            if not task_id:
+                raise ProviderRequestError(self.name, "task creation returned no id")
 
             import asyncio
             for _ in range(60):
@@ -95,11 +97,18 @@ class RunwayVideoProvider(VideoProvider, ProviderInfoMixin):
                     f"{self.base_url}/tasks/{task_id}",
                     headers={"Authorization": f"Bearer {self.api_key}"},
                 )
+                status_resp.raise_for_status()
                 status_data = status_resp.json()
                 if status_data.get("status") == "SUCCEEDED":
-                    video_url = status_data.get("output", [None])[0]
-                    return VideoResult(url=video_url or "", duration_seconds=duration)
+                    outputs = status_data.get("output") or []
+                    video_url = outputs[0] if outputs else None
+                    if not video_url:
+                        raise ProviderRequestError(self.name, "task succeeded but returned no output url")
+                    return VideoResult(url=video_url, duration_seconds=duration)
                 elif status_data.get("status") == "FAILED":
-                    raise RuntimeError(f"Runway generation failed: {status_data.get('error')}")
+                    raise ProviderRequestError(
+                        self.name, f"generation failed: {status_data.get('error')}"
+                    )
 
-        return VideoResult(url="", duration_seconds=duration)
+        # Timing out used to return an empty url, which callers read as a usable result.
+        raise ProviderRequestError(self.name, "timed out waiting for generation to finish")

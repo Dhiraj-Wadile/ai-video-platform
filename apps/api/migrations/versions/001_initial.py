@@ -15,12 +15,17 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# Portable types: native uuid/JSONB on PostgreSQL, TEXT/JSON on SQLite, so the same chain applies to
+# both. Matches app/models/types.py, which the app uses at runtime.
+UUIDType = sa.String(36).with_variant(UUID(as_uuid=True), "postgresql")
+JSONType = sa.JSON().with_variant(JSONB, "postgresql")
+
 
 def upgrade() -> None:
     # Users
     op.create_table(
         "users",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUIDType, primary_key=True),
         sa.Column("email", sa.String(255), unique=True, nullable=False, index=True),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("password_hash", sa.String(255), nullable=False),
@@ -33,14 +38,14 @@ def upgrade() -> None:
     # Projects
     op.create_table(
         "projects",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("user_id", UUIDType, sa.ForeignKey("users.id"), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("description", sa.Text),
         sa.Column("status", sa.String(30), server_default="draft"),
         sa.Column("project_type", sa.String(30), server_default="short_form"),
         sa.Column("platform", sa.String(50)),
-        sa.Column("settings_json", JSONB, server_default="{}"),
+        sa.Column("settings_json", JSONType, server_default="{}"),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now()),
     )
@@ -48,12 +53,12 @@ def upgrade() -> None:
     # Scripts
     op.create_table(
         "scripts",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("title", sa.String(255)),
         sa.Column("content", sa.Text, nullable=False),
         sa.Column("duration", sa.Integer),
-        sa.Column("structure_json", JSONB),
+        sa.Column("structure_json", JSONType),
         sa.Column("version", sa.Integer, server_default="1"),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now()),
@@ -62,17 +67,17 @@ def upgrade() -> None:
     # Characters
     op.create_table(
         "characters",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("user_id", UUIDType, sa.ForeignKey("users.id"), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("appearance", sa.Text),
         sa.Column("personality", sa.Text),
-        sa.Column("voice_config_json", JSONB),
+        sa.Column("voice_config_json", JSONType),
         sa.Column("speaking_style", sa.Text),
-        sa.Column("catchphrases", JSONB),
+        sa.Column("catchphrases", JSONType),
         sa.Column("background", sa.Text),
         sa.Column("behavior", sa.Text),
-        sa.Column("relationships", JSONB),
+        sa.Column("relationships", JSONType),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now()),
     )
@@ -80,9 +85,9 @@ def upgrade() -> None:
     # Scenes
     op.create_table(
         "scenes",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
-        sa.Column("script_id", UUID(as_uuid=True), sa.ForeignKey("scripts.id")),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("script_id", UUIDType, sa.ForeignKey("scripts.id")),
         sa.Column("scene_number", sa.Integer, nullable=False),
         sa.Column("duration", sa.Integer, nullable=False),
         sa.Column("narration", sa.Text),
@@ -94,7 +99,7 @@ def upgrade() -> None:
         sa.Column("sfx", sa.String(50)),
         sa.Column("caption", sa.Text),
         sa.Column("transition", sa.String(50)),
-        sa.Column("character_id", UUID(as_uuid=True), sa.ForeignKey("characters.id")),
+        sa.Column("character_id", UUIDType, sa.ForeignKey("characters.id")),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now()),
     )
@@ -102,23 +107,23 @@ def upgrade() -> None:
     # Assets
     op.create_table(
         "assets",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("type", sa.String(20), nullable=False),
         sa.Column("url", sa.String(500), nullable=False),
-        sa.Column("metadata_json", JSONB, server_default="{}"),
+        sa.Column("metadata_json", JSONType, server_default="{}"),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
     )
 
     # Generation Jobs
     op.create_table(
         "generation_jobs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("agent_name", sa.String(100), nullable=False),
         sa.Column("status", sa.String(20), server_default="queued"),
-        sa.Column("input_json", JSONB),
-        sa.Column("output_json", JSONB),
+        sa.Column("input_json", JSONType),
+        sa.Column("output_json", JSONType),
         sa.Column("model", sa.String(100)),
         sa.Column("tokens_in", sa.Integer),
         sa.Column("tokens_out", sa.Integer),
@@ -132,8 +137,8 @@ def upgrade() -> None:
     # Render Jobs
     op.create_table(
         "render_jobs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("status", sa.String(20), server_default="queued"),
         sa.Column("progress", sa.Integer, server_default="0"),
         sa.Column("output_url", sa.String(500)),
@@ -146,8 +151,8 @@ def upgrade() -> None:
     # Publishing Jobs
     op.create_table(
         "publishing_jobs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("platform", sa.String(50), nullable=False),
         sa.Column("status", sa.String(20), server_default="queued"),
         sa.Column("external_id", sa.String(255)),
@@ -161,23 +166,23 @@ def upgrade() -> None:
     # Trends
     op.create_table(
         "trends",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUIDType, primary_key=True),
         sa.Column("topic", sa.String(255), nullable=False),
         sa.Column("source", sa.String(100)),
         sa.Column("score", sa.Float),
-        sa.Column("metadata_json", JSONB, server_default="{}"),
+        sa.Column("metadata_json", JSONType, server_default="{}"),
         sa.Column("discovered_at", sa.DateTime, server_default=sa.func.now()),
     )
 
     # Video Analytics
     op.create_table(
         "video_analytics",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("platform", sa.String(50)),
         sa.Column("views", sa.Integer, server_default="0"),
         sa.Column("watch_time_seconds", sa.Integer, server_default="0"),
-        sa.Column("retention_json", JSONB),
+        sa.Column("retention_json", JSONType),
         sa.Column("likes", sa.Integer, server_default="0"),
         sa.Column("comments", sa.Integer, server_default="0"),
         sa.Column("shares", sa.Integer, server_default="0"),
@@ -189,17 +194,17 @@ def upgrade() -> None:
     # AI Insights
     op.create_table(
         "ai_insights",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
-        sa.Column("analysis_json", JSONB),
-        sa.Column("recommendations_json", JSONB),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("project_id", UUIDType, sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("analysis_json", JSONType),
+        sa.Column("recommendations_json", JSONType),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
     )
 
     # Prompt Templates
     op.create_table(
         "prompt_templates",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUIDType, primary_key=True),
         sa.Column("name", sa.String(100), nullable=False),
         sa.Column("category", sa.String(50), nullable=False),
         sa.Column("content", sa.Text, nullable=False),
@@ -212,8 +217,8 @@ def upgrade() -> None:
     # API Keys
     op.create_table(
         "api_keys",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("user_id", UUIDType, sa.ForeignKey("users.id"), nullable=False),
         sa.Column("provider", sa.String(50), nullable=False),
         sa.Column("encrypted_key", sa.String(500), nullable=False),
         sa.Column("label", sa.String(100)),
@@ -224,8 +229,8 @@ def upgrade() -> None:
     # User Sessions
     op.create_table(
         "user_sessions",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("id", UUIDType, primary_key=True),
+        sa.Column("user_id", UUIDType, sa.ForeignKey("users.id"), nullable=False),
         sa.Column("token", sa.String(500), nullable=False, unique=True),
         sa.Column("expires_at", sa.DateTime, nullable=False),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),

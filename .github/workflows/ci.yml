@@ -66,7 +66,7 @@ jobs:
           pytest -v --tb=short
 
   frontend:
-    name: Frontend Build
+    name: Frontend Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,12 +77,20 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint
         run: npm run lint
+        working-directory: apps/web
+
+      - name: Type check
+        run: npm run type-check
+        working-directory: apps/web
+
+      - name: Unit tests
+        run: npm run test:run
+        working-directory: apps/web
 
       - name: Build
-        run: |
-          cd apps/web
-          npm run build
+        run: npm run build
+        working-directory: apps/web

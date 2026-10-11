@@ -15,6 +15,7 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const setUser = useAppStore((s) => s.setUser)
+  const setToken = useAppStore((s) => s.setToken)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,9 +24,9 @@ export default function SignUpPage() {
     setError('')
     try {
       const data: any = await api.register(email, password, name)
-      localStorage.setItem('token', data.access_token)
+      setToken(data.access_token)
       setUser(data.user)
-      router.push('/')
+      router.push('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Registration failed')
     } finally {
