@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models.user import User
-from app.core.security import create_access_token, pwd_context
+from app.core.security import create_access_token, pwd_context, get_current_user
 
 router = APIRouter()
 
@@ -51,8 +51,18 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
     token = create_access_token(str(user.id))
     return AuthResponse(
         access_token=token,
-        user={"id": str(user.id), "email": user.email, "name": user.name},
+        user={"id": str(user.id), "email": user.email, "name": user.name, "plan": user.plan},
     )
+
+
+def _user_dict(user: User) -> dict:
+    return {"id": str(user.id), "email": user.email, "name": user.name, "plan": user.plan}
+
+
+@router.get("/me")
+async def me(user: User = Depends(get_current_user)):
+    """Current user, including plan. Lets the client refresh after an upgrade."""
+    return _user_dict(user)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -65,5 +75,5 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     token = create_access_token(str(user.id))
     return AuthResponse(
         access_token=token,
-        user={"id": str(user.id), "email": user.email, "name": user.name},
+        user={"id": str(user.id), "email": user.email, "name": user.name, "plan": user.plan},
     )

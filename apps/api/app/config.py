@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     higgsfield_api_key: str = ""
     higgsfield_video_model: str = ""
 
+    # Social publishing. Each platform is optional; without a token the account falls
+    # back to the mock publisher so scheduling can be demoed end-to-end.
+    meta_access_token: str = ""
+    instagram_business_account_id: str = ""
+    tiktok_access_token: str = ""
+    youtube_access_token: str = ""
+
+    # Billing
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_pro: str = ""
+
     # Storage
     storage_backend: str = "local"  # local | s3
     storage_dir: str = "./storage"

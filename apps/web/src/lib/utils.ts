@@ -78,6 +78,9 @@ export function formatApiError(input: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
+/** localStorage flag set once a user completes or skips the onboarding wizard. */
+export const ONBOARDING_KEY = 'onboarding_done'
+
 /** Ready-made prompts so a first-time user never faces a blank box. */
 export const VIDEO_IDEAS: string[] = [
   '5 habits that make you successful',

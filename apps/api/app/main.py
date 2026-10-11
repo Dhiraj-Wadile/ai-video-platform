@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, Response
 
 from app.config import settings
 from app.database import engine
-from app.api import auth, projects, scripts, characters, storyboard, assets, render, trends, analytics, agents, prompts, providers, costs
+from app.api import auth, projects, scripts, characters, storyboard, assets, render, trends, analytics, agents, prompts, providers, costs, publishing, billing
 from app.providers.base import ProviderNotConfigured, ProviderRequestError
 from app.services.storage_service import (
     get_storage,
@@ -58,6 +58,8 @@ app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
 app.include_router(prompts.router, prefix="/api/prompts", tags=["Prompts"])
 app.include_router(providers.router, prefix="/api/providers", tags=["Providers"])
 app.include_router(costs.router, prefix="/api/costs", tags=["Costs"])
+app.include_router(publishing.router, prefix="/api/publishing", tags=["Publishing"])
+app.include_router(billing.router, prefix="/api/billing", tags=["Billing"])
 
 
 @app.get("/api/health")

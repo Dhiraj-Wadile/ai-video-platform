@@ -57,10 +57,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!response.ok) {
     const error = await response.json().catch(() => null)
-    throw new Error(error ? formatApiError(error) : `Request failed (HTTP ${response.status})`)
+    const err = new Error(error ? formatApiError(error) : `Request failed (HTTP ${response.status})`)
+    // Pages use this to show contextual actions (e.g. an Upgrade link on 402).
+    ;(err as any).status = response.status
+    throw err
   }
 
-  return response.json()
+  // 204 / empty bodies (e.g. DELETE) have nothing to parse.
+  if (response.status === 204) return undefined as T
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
 }
 
 async function uploadFile<T>(path: string, file: File, extraData?: Record<string, string>): Promise<T> {
@@ -155,4 +161,19 @@ export const api = {
 
   getPrompts: () => request('/api/prompts'),
   updatePrompt: (id: string, data: any) => request(`/api/prompts/${id}`, { method: 'PATCH', body: data }),
+
+  getPublishingPlatforms: () => request('/api/publishing/platforms'),
+  getPublishingJobs: (projectId?: string) =>
+    request(`/api/publishing${projectId ? `?project_id=${projectId}` : ''}`),
+  schedulePublish: (data: any) => request('/api/publishing/schedule', { method: 'POST', body: data }),
+  publishJobNow: (id: string) => request(`/api/publishing/jobs/${id}/publish`, { method: 'POST' }),
+  cancelPublishJob: (id: string) => request(`/api/publishing/jobs/${id}/cancel`, { method: 'POST' }),
+  deletePublishJob: (id: string) => request(`/api/publishing/jobs/${id}`, { method: 'DELETE' }),
+
+  getMe: () => request('/api/auth/me'),
+  getPlans: () => request('/api/billing/plans'),
+  getUsage: () => request('/api/billing/usage'),
+  billingCheckout: (plan: string, successUrl?: string, cancelUrl?: string) =>
+    request('/api/billing/checkout', { method: 'POST', body: { plan, success_url: successUrl, cancel_url: cancelUrl } }),
+  billingUpgrade: (plan: string) => request('/api/billing/upgrade', { method: 'POST', body: { plan } }),
 }

@@ -12,6 +12,7 @@ from app.models.project import Project
 from app.models.job import RenderJob
 from app.services.pipeline import VideoPipeline
 from app.services.storage_service import sign_media_url
+from app.services import billing_service
 from app.tasks.render_tasks import render_project
 from app.config import settings
 
@@ -44,6 +45,17 @@ async def start_render(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Enforce the monthly video allowance for the caller's plan. 402 = payment required.
+    if not await billing_service.plan_allows_video(db, user):
+        usage = await billing_service.usage_summary(db, user)
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                f"You've used all {usage['videos_limit']} videos on the "
+                f"{usage['plan']['name']} plan this month. Upgrade your plan to keep creating."
+            ),
+        )
 
     job = RenderJob(project_id=request.project_id, status="queued", progress=0)
     db.add(job)

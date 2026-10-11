@@ -7,7 +7,7 @@ import {
   Lightbulb, MousePointerClick, Rocket, RefreshCw,
 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { VIDEO_IDEAS } from '@/lib/utils'
+import { VIDEO_IDEAS, ONBOARDING_KEY } from '@/lib/utils'
 
 interface Project {
   id: string
@@ -42,10 +42,22 @@ export default function DashboardPage() {
   const [trends, setTrends] = useState<Trend[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showTour, setShowTour] = useState(false)
 
   useEffect(() => {
     loadDashboard()
   }, [])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem(ONBOARDING_KEY)) {
+      setShowTour(true)
+    }
+  }, [])
+
+  const dismissTour = () => {
+    if (typeof window !== 'undefined') localStorage.setItem(ONBOARDING_KEY, '1')
+    setShowTour(false)
+  }
 
   async function loadDashboard() {
     setLoading(true)
@@ -102,6 +114,32 @@ export default function DashboardPage() {
           >
             <RefreshCw className="w-3.5 h-3.5" /> Retry
           </button>
+        </div>
+      )}
+
+      {showTour && (
+        <div className="p-4 rounded-2xl border border-violet-500/30 bg-violet-500/5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-5 h-5 text-violet-500 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">New here? Take the 1-minute tour</p>
+              <p className="text-xs text-muted-foreground">We&apos;ll help you get your first video made.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/onboarding"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-medium hover:brightness-110 transition-all"
+            >
+              Start tour
+            </Link>
+            <button
+              onClick={dismissTour}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 

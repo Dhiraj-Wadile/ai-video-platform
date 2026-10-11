@@ -20,6 +20,7 @@ function NewVideoForm() {
   const [stageMessage, setStageMessage] = useState('')
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [limitHit, setLimitHit] = useState(false)
 
   useEffect(() => {
     const preset = searchParams.get('topic')
@@ -47,6 +48,7 @@ function NewVideoForm() {
     if (!topic.trim()) return
     setGenerating(true)
     setError('')
+    setLimitHit(false)
     setProgress(steps.map((step) => ({ step, done: false })))
 
     try {
@@ -100,6 +102,7 @@ function NewVideoForm() {
       }
     } catch (err: any) {
       setError(err.message || 'Generation failed')
+      setLimitHit(err?.status === 402)
       setProgress((p) => p.map((s) => ({ ...s, done: false })))
     } finally {
       setGenerating(false)
@@ -125,6 +128,11 @@ function NewVideoForm() {
         {error && (
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2 flex-wrap">
             <AlertCircle className="w-4 h-4" /> {error}
+            {limitHit && (
+              <Link href="/billing" className="text-violet-500 hover:underline font-medium">
+                Upgrade plan
+              </Link>
+            )}
             {createdProjectId && (
               <Link
                 href={`/studio/editor?project=${createdProjectId}`}

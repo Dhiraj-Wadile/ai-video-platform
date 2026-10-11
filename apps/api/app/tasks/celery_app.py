@@ -18,6 +18,14 @@ celery_app.conf.update(
     task_soft_time_limit=1500,
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=100,
+    # Run the publisher every minute so scheduled posts go out on time. Celery beat
+    # (or the `worker-beat` container) must be running for this to fire.
+    beat_schedule={
+        "publish-due-jobs": {
+            "task": "tasks.publish_due",
+            "schedule": 60.0,
+        },
+    },
 )
 
 celery_app.autodiscover_tasks(["app.tasks"], related_name=None)
@@ -26,4 +34,4 @@ celery_app.autodiscover_tasks(["app.tasks"], related_name=None)
 # The @shared_task definitions live in render_tasks / generation_tasks, so import them
 # explicitly - otherwise the worker boots with zero app tasks and every .delay() call
 # raises NotRegistered.
-from app.tasks import generation_tasks, render_tasks  # noqa: E402,F401
+from app.tasks import generation_tasks, render_tasks, publishing_tasks  # noqa: E402,F401

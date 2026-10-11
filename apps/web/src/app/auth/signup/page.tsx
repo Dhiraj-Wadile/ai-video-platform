@@ -26,7 +26,8 @@ export default function SignUpPage() {
       const data: any = await api.register(email, password, name)
       setToken(data.access_token)
       setUser(data.user)
-      router.push('/dashboard')
+      if (typeof window !== 'undefined') localStorage.removeItem('onboarding_done')
+      router.push('/onboarding')
     } catch (err: any) {
       setError(err.message || 'Registration failed')
     } finally {

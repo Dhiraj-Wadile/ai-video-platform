@@ -23,6 +23,9 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     avatar_url = Column(String(500))
     role = Column(String(20), default="creator")
+    # Subscription tier. Drives the usage limits in billing_service; "free" until upgraded.
+    plan = Column(String(20), default="free", nullable=False)
+    stripe_customer_id = Column(String(255))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

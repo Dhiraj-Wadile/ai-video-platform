@@ -85,6 +85,7 @@ def test_celery_worker_registers_the_app_tasks():
         "tasks.generate_storyboard",
         "tasks.quality_check",
         "tasks.analyze_trend",
+        "tasks.publish_due",
     }
 
 

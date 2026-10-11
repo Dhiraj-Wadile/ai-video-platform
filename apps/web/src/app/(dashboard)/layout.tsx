@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   Video, Sparkles, TrendingUp, BarChart3, Wand2, Settings, Bot, Users, Film, Type,
-  LogOut, Menu, X, Loader2,
+  LogOut, Menu, X, Loader2, Send, CreditCard,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
+import { api } from '@/lib/api'
 
 const navSections = [
   {
@@ -35,6 +36,7 @@ const navSections = [
     title: 'Content',
     items: [
       { label: 'Projects', href: '/content/projects', icon: Video },
+      { label: 'Publishing', href: '/content/publishing', icon: Send },
     ],
   },
   {
@@ -64,6 +66,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/auth/signin')
     }
   }, [token, router])
+
+  // Keep the plan badge fresh (e.g. right after an upgrade in another tab).
+  useEffect(() => {
+    if (!token) return
+    api.getMe().then((u: any) => setUser(u)).catch(() => {})
+  }, [token, setUser])
 
   useEffect(() => {
     setMobileOpen(false)
@@ -152,13 +160,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="p-3 border-t border-border space-y-1">
           {user && (
             <div className="px-3 py-2 text-sm">
-              <p className="font-medium truncate">{user.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium truncate">{user.name}</p>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-500 capitalize shrink-0">
+                  {user.plan || 'free'}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground truncate">{user.email}</p>
             </div>
           )}
           <Link
+            href="/billing"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === '/billing'
+                ? 'text-foreground bg-accent font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            Billing
+          </Link>
+          <Link
             href="/settings"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === '/settings'
+                ? 'text-foreground bg-accent font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            }`}
           >
             <Settings className="w-4 h-4" />
             Settings
